@@ -10,6 +10,21 @@ This guide provides detailed information for developers working on the RAG proje
 - Docker and Docker Compose
 - Task (task runner)
 - PostgreSQL client (for psql)
+- Poetry (will be installed automatically)
+
+### Poetry Setup
+
+The project uses Poetry for dependency management. The `task setup-dev` command will install Poetry if it's not 
+present, but you'll need to add it to your PATH:
+
+```bash
+# Add Poetry to your PATH (for zsh)
+echo 'export PATH="/Users/$USER/.local/bin:$PATH"' >> ~/.zshrc
+source ~/.zshrc
+
+# Verify Poetry installation
+poetry --version
+```
 
 ### Initial Setup
 
@@ -24,21 +39,18 @@ cd vector_rag
 task setup-dev
 ```
 This command will:
-- Create a virtual environment
-- Install development dependencies
-- Install the package in editable mode with dev dependencies
+- Install Poetry if not already installed
+- Create a Poetry-managed virtual environment
+- Install all dependencies including development dependencies
 - Set up pre-commit hooks
+
+Note: If you see "poetry: command not found", you need to add Poetry to your PATH as described in the Poetry Setup section above.
 
 3. Configure environment variables:
 ```bash
-cp .env.example .env
+cp environment/.env.example .env
 # Edit .env with your settings:
-# - POSTGRES_USER
-# - POSTGRES_PASSWORD
-# - POSTGRES_DB
-# - POSTGRES_HOST
-# - POSTGRES_PORT
-# - OPENAI_API_KEY (if using OpenAI embeddings)
+
 ```
 
 ## Core Libraries
@@ -57,6 +69,7 @@ cp .env.example .env
 - **pytest-cov**: Coverage reporting
 
 ### Development Tools
+- **Poetry**: Dependency and environment management
 - **black**: Code formatting
 - **mypy**: Static type checking
 - **isort**: Import sorting
@@ -66,9 +79,10 @@ cp .env.example .env
 ### Development Setup and Maintenance
 
 ```bash
-task setup-dev             # Initial dev environment setup (venv, dependencies)
-task verify-deps           # Verify dependencies are correctly installed
-task freeze               # Generate requirements.txt with top-level dependencies
+task setup-dev             # Initial dev environment setup (Poetry, venv, dependencies)
+task verify-deps           # Verify Poetry dependencies are correctly installed
+task update-deps          # Update dependencies to their latest versions
+task export-reqs          # Export Poetry dependencies to requirements.txt files
 ```
 
 ### Testing
@@ -204,10 +218,17 @@ task demo:openai         # Run example ingestion with OpenAI embedder
 
 ### Environment Issues
 - Verify dependencies: `task verify-deps`
+- Update dependencies: `task update-deps`
 - Recreate virtual environment:
   ```bash
-  rm -rf venv
+  poetry env remove --all
   task setup-dev
+  ```
+- Poetry PATH issues:
+  ```bash
+  # Add Poetry to PATH
+  echo 'export PATH="/Users/$USER/.local/bin:$PATH"' >> ~/.zshrc
+  source ~/.zshrc
   ```
 
 ### Testing Issues

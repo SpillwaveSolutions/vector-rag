@@ -20,13 +20,13 @@ class Config:
         DB_PORT: Optional[int] = None,
         DB_NAME: Optional[str] = None,
         OPENAI_API_KEY: Optional[str] = None,
-        OPENAI_TEXT_EMBED_MODEL: Optional[str] = None,
+        EMBEDDINGS_MODEL: Optional[str] = None,
         LOG_LEVEL: Optional[str] = None,
         LOG_LEVEL_CONSOLE: Optional[str] = None,
         LOG_DIR: Optional[Union[str, Path]] = None,
         CHUNK_SIZE: Optional[int] = None,
         CHUNK_OVERLAP: Optional[int] = None,
-        EMBEDDING_DIM: Optional[int] = None,
+        EMBEDDINGS_DIM: Optional[int] = None,
         VECTOR_INDEX_LISTS: Optional[list] = None,
         **kwargs,
     ):
@@ -47,14 +47,14 @@ class Config:
             "DB_PORT": DB_PORT,
             "DB_NAME": DB_NAME,
             "OPENAI_API_KEY": OPENAI_API_KEY,
-            "OPENAI_TEXT_EMBED_MODEL": OPENAI_TEXT_EMBED_MODEL,
+            "EMBEDDINGS_MODEL": EMBEDDINGS_MODEL,
             "LOG_LEVEL": LOG_LEVEL,
             "LOG_LEVEL_CONSOLE": LOG_LEVEL_CONSOLE,
             "VECTOR_INDEX_LISTS": VECTOR_INDEX_LISTS,
             "LOG_DIR": LOG_DIR,
             "CHUNK_SIZE": CHUNK_SIZE,
             "CHUNK_OVERLAP": CHUNK_OVERLAP,
-            "EMBEDDING_DIM": EMBEDDING_DIM,
+            "EMBEDDINGS_DIM": EMBEDDINGS_DIM,
             **kwargs,
         }
 
@@ -76,12 +76,12 @@ class Config:
 
         # OpenAI configuration
         self.OPENAI_API_KEY = self.get_or_default("OPENAI_API_KEY", "")
-        self.OPENAI_TEXT_EMBED_MODEL = self.get_or_default(
-            "OPENAI_TEXT_EMBED_MODEL", "text-embedding-3-small"
+        self.EMBEDDINGS_MODEL = self.get_or_default(
+            "EMBEDDINGS_MODEL", "text-embedding-3-small"
         )
 
         # Vector dimensions and search configuration
-        self.EMBEDDING_DIM = int(self.get_or_default("EMBEDDING_DIM", "1536"))
+        self.EMBEDDINGS_DIM = int(self.get_or_default("EMBEDDINGS_DIM", "1536"))
         self.VECTOR_INDEX_LISTS = self.get_or_default("VECTOR_INDEX_LISTS", [100])
         self.VECTOR_INDEX_PROBES = int(self.get_or_default("VECTOR_INDEX_PROBES", "10"))
         self.DEFAULT_SIMILARITY_THRESHOLD = float(

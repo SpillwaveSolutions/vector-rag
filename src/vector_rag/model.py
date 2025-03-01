@@ -69,9 +69,9 @@ class ChunkResults(BaseModel):
     """Container for chunk search results with pagination info."""
 
     results: List[ChunkResult]
-    total_count: NonNegativeInt
-    page: PositiveInt
-    page_size: PositiveInt
+    total_count: NonNegativeInt = Field(...)
+    page: PositiveInt = Field(1)
+    page_size: PositiveInt = Field(10)
 
     @property
     def total_pages(self) -> int:

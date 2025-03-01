@@ -1,22 +1,20 @@
-version: '3.8'
-
 services:
   db:
-    build: 
-      context: ./db
-      dockerfile: Dockerfile
+    image: ankane/pgvector
     env_file: .env
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: vectordb
+      POSTGRES_DB: ${DB_NAME:-vectordb}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
     volumes:
-      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
-      - ./db/sql:/sql
+      - ./rag-db/db/sql:/docker-entrypoint-initdb.d
+      - ./postgres_data:/var/lib/postgresql/data
     ports:
-      - "${POSTGRES_PORT}:5432"
+      - "${DB_PORT:-5433}:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres}"]
       interval: 5s
       timeout: 5s
       retries: 5
+
+volumes:
+  postgres_data:

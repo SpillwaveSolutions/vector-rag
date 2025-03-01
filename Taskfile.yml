@@ -2,61 +2,60 @@ version: '3'
 
 dotenv: ['.env']
 
-includes:
-  db: ./db/Taskfile.yml
-
 tasks:
-  install:
-    desc: Install package in development mode with all dependencies
+  install-poetry:
+    desc: "Install Poetry if not already installed"
     cmds:
-      - pip install -e .
-      - pip install -e ".[dev]"
+      - |
+        if ! command -v poetry &> /dev/null; then
+          echo "Installing Poetry..."
+          curl -sSL https://install.python-poetry.org | python3 -
+          export PATH="/Users/cmathias/.local/bin:$PATH"
+          source ~/.zshrc
+        else
+          echo "Poetry is already installed"
+        fi
+
+  install:
+    desc: "Install package and dependencies using Poetry"
+    deps: [install-poetry]
+    cmds:
+      - poetry install
 
   setup-dev:
-    desc: "Set up the local dev environment"
+    desc: "Set up the local dev environment with Poetry"
+    deps: [install-poetry]
     cmds:
       - echo "Setting up dev environment..."
-      - python -m venv venv
-      - source venv/bin/activate
-      - python -m pip install -r requirements.txt
-      - python -m pip install -e ".[dev]"
+      - |
+        if command -v poetry &> /dev/null; then
+          POETRY_CMD="poetry"
+        else
+          POETRY_CMD="/Users/cmathias/.local/bin/poetry"
+        fi
+        $POETRY_CMD env use python3.12
+        $POETRY_CMD install --with dev
       - echo "✅ Development environment setup complete"
       
   verify-deps:
     desc: "Verify that dependencies are installed correctly"
     cmds:
-      - source venv/bin/activate
-      - |
-        echo "Checking sqlalchemy..."
-        python -m pip show sqlalchemy | grep -q "Name: sqlalchemy" || { echo "❌ sqlalchemy not found"; exit 1; }
-        echo "✅ sqlalchemy found"
-      - |
-        echo "Checking openai..."
-        python -m pip show openai | grep -q "Name: openai" || { echo "❌ openai not found"; exit 1; }
-        echo "✅ openai found"
-      - |
-        echo "Checking sentence-transformers..."
-        python -m pip show sentence-transformers | grep -q "Name: sentence-transformers" || { echo "❌ sentence-transformers not found"; exit 1; }
-        echo "✅ sentence-transformers found"
-      - |
-        echo "Checking pgvector..."
-        python -m pip show pgvector | grep -q "Name: pgvector" || { echo "❌ pgvector not found"; exit 1; }
-        echo "✅ pgvector found"
-      - |
-        echo "Checking psycopg2-binary..."
-        python -m pip show psycopg2-binary | grep -q "Name: psycopg2-binary" || { echo "❌ psycopg2-binary not found"; exit 1; }
-        echo "✅ psycopg2-binary found"
+      - poetry check
+      - poetry install --dry-run
       - echo "All dependencies verified successfully! ✅"
 
-  freeze:
-    desc: Generate requirements files
+  update-deps:
+    desc: "Update dependencies to their latest versions"
     cmds:
-      # Generate core requirements first
-      - pip install -e "."
-      - pip freeze --exclude-editable > requirements.txt
-      # Generate dev requirements next
-      - pip install -e ".[dev]"
-      - pip freeze --exclude-editable > requirements-dev.txt
+      - poetry update
+      - poetry lock
+      - echo "Dependencies updated successfully! ✅"
+
+  export-reqs:
+    desc: "Export requirements files from Poetry"
+    cmds:
+      - poetry export -f requirements.txt --output requirements.txt --without-hashes
+      - poetry export -f requirements.txt --output requirements-dev.txt --with dev --without-hashes
     generates:
       - requirements.txt
       - requirements-dev.txt
@@ -64,45 +63,44 @@ tasks:
   test:all:
     desc: "Run Python tests"
     cmds:
-      - pytest tests/
+      - poetry run pytest tests/
       - echo "✅ All tests passed"
 
   test:name:
     desc: "Run a specific test by name"
     cmds:
-      - pytest tests/ -k "{{.CLI_ARGS}}"
+      - poetry run pytest tests/ -k "{{.CLI_ARGS}}"
       - echo "✅ Test completed"
 
   test:integration:
     desc: "Run integration tests"
     cmds:
       - sleep 5  # Give DB time to start
-      - pytest tests/integration -v
+      - poetry run pytest tests/integration -v
 
   test:single:
     desc: "Run a single test"
     cmds:
-      - pytest "{{.CLI_ARGS}}"
+      - poetry run pytest "{{.CLI_ARGS}}"
       - echo "✅ Test completed"
-
 
   test:coverage:
     desc: "Run Python tests with coverage report"
     cmds:
-      - pytest tests/ --cov=src/vector_rag --cov-report=term-missing
+      - poetry run pytest tests/ --cov=src/vector_rag --cov-report=term-missing
       - echo "✅ Coverage report generated"
 
   format:
     desc: "Format Python code"
     cmds:
-      - black src/ tests/
-      - isort src/ tests/
+      - poetry run black src/ tests/
+      - poetry run isort src/ tests/
       - echo "✅ Code formatting complete"
 
   typecheck:
     desc: "Run type checking"
     cmds:
-      - mypy src/
+      - poetry run mypy src/
       - echo "✅ Type checking complete"
 
   lint:
@@ -115,25 +113,19 @@ tasks:
     cmds:
       - create-project-markdown
 
-  db:up:
+  db-up:
     desc: Start the database container
     cmds:
       - docker compose up -d db
-      - sleep 5  # Wait for DB to be ready
-      - task: db:init
 
-  db:init:
-    desc: Initialize database schema and indexes
-    cmds:
-      - python src/scripts/init_db.py
-
-  db:recreate:
+  db-recreate:
     desc: Recreate database from scratch
     cmds:
-      - task: db:down
-      - task: db:up
+      - task: db-down
+      - rm -rf ./postgres_data
+      - task: db-up
 
-  db:down:
+  db-down:
     desc: Stop the database container
     cmds:
       - docker compose down
@@ -151,4 +143,4 @@ tasks:
   psql:
     desc: "Start an interactive psql session"
     cmds:
-      - PGPASSWORD=${POSTGRES_PASSWORD} psql -h ${POSTGRES_HOST} -p ${POSTGRES_PORT} -U ${POSTGRES_USER} -d ${POSTGRES_DB}
+      - PGPASSWORD=${DB_PASSWORD} psql -h ${DB_HOST} -p ${DB_PORT} -U ${DB_USER} -d ${DB_NAME}

@@ -1,5 +1,6 @@
 """Database models for RAG."""
 
+import os
 from datetime import datetime
 from datetime import timezone as tz
 from typing import List, Optional
@@ -82,7 +83,7 @@ class ChunkDB(DbBase):
         Integer, ForeignKey("files.id", ondelete="CASCADE")
     )
     content: Mapped[str] = mapped_column(Text, nullable=False)
-    embedding: Mapped[List[float]] = mapped_column(Vector(1536))  # type: ignore
+    embedding: Mapped[List[float]] = mapped_column(Vector(int(os.getenv("EMBEDDINGS_DIM", 1536))))  # type: ignore
     chunk_index: Mapped[int] = mapped_column(Integer, nullable=False)
     chunk_metadata: Mapped[dict] = mapped_column(JSONB, default={})
     created_at: Mapped[datetime] = mapped_column(

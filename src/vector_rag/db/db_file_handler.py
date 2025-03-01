@@ -173,6 +173,54 @@ class DBFileHandler(FileHandler):
                 return True
             return False
 
+    def add_chunks(self, file_id: int, chunks: List[Chunk]) -> List[Optional[Chunk]]:
+        """Add multiple chunks to the database for a given file in an optimized batch.
+
+        Args:
+            file_id: ID of the file these chunks belong to
+            chunks: List of Chunk objects to be added
+
+        Returns:
+            List[Optional[Chunk]]: List of created chunk objects, with None for any failed chunks
+        """
+        with self.session_scope() as session:
+            # Verify file exists
+            file = session.get(FileDB, file_id)
+            if not file:
+                logger.error(f"File with id {file_id} not found")
+                return [None] * len(chunks)
+
+            try:
+                # Generate embeddings for all chunks in one call
+                embeddings = self.embedder.embed_texts(chunks)
+
+                # Create and add all chunk records
+                created_chunks = []
+                for chunk, embedding in zip(chunks, embeddings):
+                    chunk_db = ChunkDB(
+                        file_id=file_id,
+                        content=chunk.content,
+                        embedding=embedding,
+                        chunk_index=chunk.index,
+                        chunk_metadata=chunk.meta_data,
+                    )
+                    session.add(chunk_db)
+
+                    # Create Chunk object for return
+                    created_chunks.append(Chunk(
+                        target_size=chunk.target_size,
+                        content=chunk_db.content,
+                        index=chunk_db.chunk_index,
+                        meta_data=chunk_db.chunk_metadata,
+                    ))
+
+                session.flush()
+                return created_chunks
+
+            except Exception as e:
+                logger.error(f"Error adding chunks to file {file_id}: {str(e)}")
+                return [None] * len(chunks)
+
     def add_chunk(self, file_id: int, chunk: Chunk) -> Optional[Chunk]:
         """Add a single chunk to the database for a given file.
 

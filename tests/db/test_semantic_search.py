@@ -12,7 +12,7 @@ from vector_rag.embeddings import MockEmbedder
 from vector_rag.model import File
 
 config = Config()
-EMBEDDING_DIM = config.EMBEDDING_DIM
+EMBEDDINGS_DIM = config.EMBEDDINGS_DIM
 TEST_DB_NAME = config.TEST_DB_NAME
 TEST_DB_URL = config.TEST_DB_URL
 
@@ -31,7 +31,7 @@ def mock_embedder():
                 for t in texts
             ]
 
-    return TestEmbedder(dimension=EMBEDDING_DIM)
+    return TestEmbedder(dimension=EMBEDDINGS_DIM)
 
 
 @pytest.fixture
@@ -53,7 +53,7 @@ def test_files():
 def populated_handler(test_db, mock_embedder, test_files):
     """Create a handler with test data."""
     # Ensure vector dimensions match
-    ensure_vector_dimension(test_db, EMBEDDING_DIM)
+    ensure_vector_dimension(test_db, EMBEDDINGS_DIM)
 
     handler = DBFileHandler.create(
         TEST_DB_NAME, mock_embedder, chunker=LineChunker.create(5, 0)

@@ -1,11 +1,20 @@
 """Pytest configuration file."""
 
+import os
+from pathlib import Path
+
 import pytest
+from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import OperationalError
 
 from vector_rag.config import Config
 from vector_rag.embeddings import MockEmbedder
+
+# Load environment variables from .env file
+env_path = Path('../.env')
+if env_path.exists():
+    load_dotenv(env_path)
 
 
 def create_database():
@@ -50,7 +59,13 @@ def create_database():
 @pytest.fixture
 def mock_embedder():
     """Create a mock embedder for testing."""
-    return MockEmbedder(dimension=4)  # Small dimension for testing
+    config = Config()
+    if config.get_or_default("LOCAL_EMBEDDING", False):
+        # Use 384 dimensions for SentenceTransformers
+        return MockEmbedder(dimension=384)
+    else:
+        # Use 1536 dimensions for OpenAI
+        return MockEmbedder(dimension=1536)
 
 
 @pytest.fixture(scope="function")

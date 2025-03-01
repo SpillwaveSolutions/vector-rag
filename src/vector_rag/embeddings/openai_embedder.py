@@ -1,11 +1,10 @@
-"""OpenAI embedder implementation."""
-
 import os
+import time
 from typing import List, Optional
-
 from ..config import Config
 from ..model import Chunk
 from .base import Embedder
+import os
 
 
 class OpenAIEmbedder(Embedder):
@@ -27,7 +26,7 @@ class OpenAIEmbedder(Embedder):
         if config is None:
             config = Config()
 
-        super().__init__(config.OPENAI_TEXT_EMBED_MODEL, config.EMBEDDING_DIM)
+        super().__init__(config.EMBEDDINGS_MODEL, config.EMBEDDINGS_DIM)
         os.environ["OPENAI_API_KEY"] = config.OPENAI_API_KEY
 
         if not config.OPENAI_API_KEY:
@@ -36,6 +35,8 @@ class OpenAIEmbedder(Embedder):
 
         self.client = openai.OpenAI(api_key=config.OPENAI_API_KEY)
         self.batch_size = batch_size
+        if config.EMBEDDINGS_MODEL == "text-embedding-3-small":
+            self.dimension = 1536
 
     def get_dimension(self) -> int:
         """Get the dimension of the embeddings.
@@ -62,6 +63,8 @@ class OpenAIEmbedder(Embedder):
                 model=self.model_name,
                 input=batch,
             )
+            # Getting weird rate-limit timeouts here. Cheap sleep for now.
+            time.sleep(0.02) # @Rick take a look here...can we handle rate limit response better?
             batch_embeddings = [e.embedding for e in response.data]
             embeddings.extend(batch_embeddings)
         return embeddings
@@ -74,9 +77,16 @@ class OpenAIEmbedder(Embedder):
         dimension: Optional[int] = None,
         batch_size=16,
     ):
-        config = Config(
-            OPENAI_API_KEY=api_key,
-            OPENAI_TEXT_EMBED_MODEL=model_name,
-            EMBEDDING_DIM=dimension,
-        )
+        current_directory = os.getcwd()
+        env_file = os.path.join(current_directory, '.env')
+        if not os.path.exists(env_file):
+            print("ENV FILE DOES NOT EXIST")
+            config = Config(
+                OPENAI_API_KEY=api_key,
+                EMBEDDINGS_MODEL=model_name or "text-embedding-3-small",
+                EMBEDDINGS_DIM=dimension or 1536,
+            )
+        else:
+            config = Config(env_file=env_file)
+
         return OpenAIEmbedder(config, batch_size=batch_size)

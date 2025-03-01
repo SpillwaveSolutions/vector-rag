@@ -123,3 +123,4 @@ celerybeat.pid
 .pmarkdownc/
 project_structure.md
 ./.task
+.aider*

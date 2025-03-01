@@ -1,6 +1,7 @@
 # RAG (Retrieval-Augmented Generation) System
 
-A Python-based RAG system that processes text files, generates embeddings, and stores them in a Postgres database with pgvector for efficient similarity search.
+A Python-based RAG system that processes text files, generates embeddings, and stores them in a Postgres database 
+with pgvector for efficient similarity search.
 
 For detailed information, see:
 - [Design Document](DESIGN.md) - System architecture and requirements
