@@ -30,7 +30,7 @@ class SentenceTransformersEmbedder(Embedder):
         device = "cuda" if torch.cuda.is_available() else "cpu"
         self.model = SentenceTransformer(model_name, device=device)
         self.batch_size = batch_size
-        self.dimension = self.model.get_sentence_EMBEDDINGS_DIMension()
+        self.dimension = self.model.get_sentence_embedding_dimension()
 
     def get_dimension(self) -> int:
         """Get the dimension of the embeddings.

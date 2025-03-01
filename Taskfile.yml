@@ -117,6 +117,12 @@ tasks:
     desc: Start the database container
     cmds:
       - docker compose up -d db
+      - sleep 3  # Give the DB time to initialize
+      - |
+        until docker compose exec db pg_isready; do
+          echo "Waiting for database..."
+          sleep 1
+        done
 
   db-recreate:
     desc: Recreate database from scratch

@@ -10,13 +10,16 @@ from vector_rag.db import ChunkDB
 from vector_rag.embeddings.openai_embedder import OpenAIEmbedder
 
 config = Config()
-EMBEDDINGS_DIM = config.EMBEDDINGS_DIM
-OPENAI_MODEL = config.EMBEDDINGS_MODEL
+EMBEDDINGS_DIM = 384  # Default dimension for tests
+OPENAI_MODEL = "text-embedding-3-small"
 
 
 def test_init_with_api_key():
     """Test initialization with API key."""
-    embedder = OpenAIEmbedder.create(api_key="test_key")
+    embedder = OpenAIEmbedder.create(
+        api_key="test_key",
+        dimension=EMBEDDINGS_DIM
+    )
     assert embedder.model_name == OPENAI_MODEL
     assert embedder.dimension == EMBEDDINGS_DIM
     assert embedder.batch_size == 16

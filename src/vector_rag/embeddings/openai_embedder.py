@@ -35,8 +35,7 @@ class OpenAIEmbedder(Embedder):
 
         self.client = openai.OpenAI(api_key=config.OPENAI_API_KEY)
         self.batch_size = batch_size
-        if config.EMBEDDINGS_MODEL == "text-embedding-3-small":
-            self.dimension = 1536
+        self.dimension = config.EMBEDDINGS_DIM
 
     def get_dimension(self) -> int:
         """Get the dimension of the embeddings.
@@ -77,16 +76,10 @@ class OpenAIEmbedder(Embedder):
         dimension: Optional[int] = None,
         batch_size=16,
     ):
-        current_directory = os.getcwd()
-        env_file = os.path.join(current_directory, '.env')
-        if not os.path.exists(env_file):
-            print("ENV FILE DOES NOT EXIST")
-            config = Config(
-                OPENAI_API_KEY=api_key,
-                EMBEDDINGS_MODEL=model_name or "text-embedding-3-small",
-                EMBEDDINGS_DIM=dimension or 1536,
-            )
-        else:
-            config = Config(env_file=env_file)
+        config = Config(
+            OPENAI_API_KEY=api_key,
+            EMBEDDINGS_MODEL=model_name or "text-embedding-3-small",
+            EMBEDDINGS_DIM=dimension or 384,  # Match SentenceTransformers dimension
+        )
 
         return OpenAIEmbedder(config, batch_size=batch_size)
