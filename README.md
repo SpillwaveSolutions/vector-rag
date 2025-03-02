@@ -14,44 +14,163 @@ For detailed information, see:
 - Vector embeddings via OpenAI or Hugging Face
 - Postgres + pgvector for vector storage and search
 - Project-based organization of documents
+- Comprehensive Taskfile for development workflows
+- Dockerized Postgres database with pgvector
 
-## Quick Start
+## Getting Started
 
-1. Set up the environment:
+### Prerequisites
+
+- Python 3.10+
+- Docker
+- Poetry (will be installed automatically by the setup script)
+
+### Poetry Management
+
+This project uses Poetry for dependency management. Key Poetry commands are wrapped in Taskfile tasks:
+
+- Install dependencies:
 ```bash
-# Create and activate virtual environment
-python -m venv venv
-source venv/bin/activate
-
-# Install dependencies
-pip install -r requirements.txt
+task install
 ```
 
-2. Configure environment variables:
+- Set up development environment:
 ```bash
-cp .env.example .env
+task setup-dev
+```
+
+- Update dependencies:
+```bash
+task update-deps
+```
+
+- Export requirements files:
+```bash
+task export-reqs
+```
+
+- Check dependency status:
+```bash
+task verify-deps
+```
+
+The project includes both runtime and development dependencies specified in `pyproject.toml`.
+
+### Installation
+
+1. Clone the repository:
+```bash
+git clone https://github.com/SpillwaveSolutions/vector-rag
+cd vector-rag
+```
+
+2. Set up the development environment:
+```bash
+task setup-dev
+```
+
+3. Configure environment variables:
+```bash
+cp environment/.env.example .env
 # Edit .env with your settings:
 # - Database credentials
 # - OpenAI API key (if using OpenAI embeddings)
 ```
 
-3. Start the database:
+## Running the System
+
+### Start the Database
+
+The system uses a Dockerized Postgres database with pgvector:
 ```bash
 task db:up
 ```
 
-4. Run the example:
+### Run Examples
+
+- With mock embeddings (no API key required):
 ```bash
-task demo:example
+task demo:mock
 ```
 
-## Development
-
+- With OpenAI embeddings (requires API key in .env):
 ```bash
-# Run tests
+task demo:openai
+```
+
+### Interactive Database Access
+
+To access the database directly:
+```bash
+task psql
+```
+
+## Testing
+
+The project includes comprehensive tests:
+
+- Run all tests:
+```bash
+task test:all
+```
+
+- Run integration tests:
+```bash
 task test:integration
-
 ```
+
+- Run tests with coverage report:
+```bash
+task test:coverage
+```
+
+- Run a specific test:
+```bash
+task test:single -- tests/path/to/test_file.py::test_name
+```
+
+## Development Workflow
+
+### Code Formatting and Linting
+```bash
+task format  # Runs black and isort
+task typecheck  # Runs mypy
+task lint  # Runs all code quality checks
+```
+
+### Dependency Management
+
+- Update dependencies:
+```bash
+task update-deps
+```
+
+- Export requirements files:
+```bash
+task export-reqs
+```
+
+## Database Management
+
+- Recreate the database from scratch:
+```bash
+task db:recreate
+```
+
+- Stop the database:
+```bash
+task db:down
+```
+
+## Configuration
+
+The system is configured through environment variables in `.env`. Key settings include:
+
+- `DB_*`: Database connection settings
+- `OPENAI_API_KEY`: Required for OpenAI embeddings
+- `LOCAL_EMBEDDING`: Set to `true` to use local SentenceTransformers
+- `EMBEDDINGS_DIM`: Vector dimension (384 for local, 1536 for OpenAI)
+- `CHUNK_SIZE`/`CHUNK_OVERLAP`: Text chunking parameters
 
 ## License
 
@@ -64,3 +183,5 @@ MIT License
 3. Commit your changes
 4. Push to the branch
 5. Create a Pull Request
+
+Please ensure all tests pass and code is properly formatted before submitting PRs.

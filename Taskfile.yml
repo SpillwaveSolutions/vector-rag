@@ -113,7 +113,7 @@ tasks:
     cmds:
       - create-project-markdown
 
-  db-up:
+  db:up:
     desc: Start the database container
     cmds:
       - docker compose up -d db
@@ -124,14 +124,14 @@ tasks:
           sleep 1
         done
 
-  db-recreate:
+  db:recreate:
     desc: Recreate database from scratch
     cmds:
       - task: db-down
       - rm -rf ./postgres_data
       - task: db-up
 
-  db-down:
+  db:down:
     desc: Stop the database container
     cmds:
       - docker compose down
