@@ -11,8 +11,6 @@ from vector_rag.model import File
 
 config = Config()
 EMBEDDINGS_DIM = 384
-TEST_DB_NAME = config.TEST_DB_NAME
-TEST_DB_URL = config.TEST_DB_URL
 
 
 @pytest.fixture
@@ -52,7 +50,7 @@ def populated_handler(test_db, mock_embedder, test_files):
     ensure_vector_dimension(test_db, 384)
 
     handler = DBFileHandler.create(
-        TEST_DB_NAME, mock_embedder, chunker=LineChunker.create(5, 0)
+        config.TEST_DB_NAME, mock_embedder, chunker=LineChunker.create(5, 0)
     )
     project = handler.create_project("Test Project")
 

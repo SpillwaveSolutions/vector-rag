@@ -20,20 +20,19 @@ from vector_rag.config import Config
 from vector_rag.embeddings import MockEmbedder
 
 # Load environment variables from .env file
-env_path = Path('../.env')
+env_path = Path('../../.env')
 if env_path.exists():
     load_dotenv(env_path)
 
-config = Config(env_file=env_path)
+def get_config():
+    global config
+    config = Config(env_file=env_path)
 
 def setup_test_env():
     """Set up test environment."""
-    os.environ["VECTOR_TEST_MODE"] = "1"
-    os.environ["POSTGRES_DB"] = config.TEST_DB_NAME
-    os.environ["POSTGRES_USER"] = "postgres"
+    os.environ["POSTGRES_DB"] = os.getenv("TEST_DB_NAME", "vectordb_test")
     os.environ["POSTGRES_PASSWORD"] = "postgres"
-    os.environ["POSTGRES_HOST"] = "localhost"
-    os.environ["POSTGRES_PORT"] = "5432"
+    get_config()
 
 def ensure_db_running():
     """Helper function to ensure DB container is running."""

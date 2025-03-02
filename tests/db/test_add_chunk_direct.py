@@ -6,13 +6,11 @@ from vector_rag.embeddings import MockEmbedder
 from vector_rag.model import Chunk, File
 
 config = Config()
-TEST_DB_NAME = config.TEST_DB_NAME
-
 
 @pytest.fixture
 def db_handler(test_db):
     """Create a DBFileHandler with test database."""
-    return DBFileHandler.create(TEST_DB_NAME, embedder=MockEmbedder(dimension=384))
+    return DBFileHandler.create(config.TEST_DB_NAME, embedder=MockEmbedder(dimension=384))
 
 
 def test_add_chunk(db_handler):

@@ -320,8 +320,12 @@ class DBFileHandler(FileHandler):
             session.add(file)
             session.flush()  # Get file.id
 
-            # Create chunks
+            # Create chunks and preserve metadata
             chunks: List[Chunk] = self.chunker.chunk_text(file_model)
+            # Copy file metadata to each chunk
+            for chunk in chunks:
+                chunk.meta_data = file_model.meta_data.copy()
+            
             embeddings = self.embedder.embed_texts(chunks)
 
             for chunk, embedding in zip(chunks, embeddings):
@@ -330,6 +334,7 @@ class DBFileHandler(FileHandler):
                     content=chunk.content,
                     embedding=embedding,
                     chunk_index=chunk.index,
+                    chunk_metadata=chunk.meta_data,
                 )
                 session.add(chunk_obj)
 
@@ -515,8 +520,9 @@ class DBFileHandler(FileHandler):
         page: int = 1,
         page_size: int = 10,
         similarity_threshold: float = 0.7,
+        metadata_filter: Optional[dict] = None,
     ) -> ChunkResults:
-        """Search for chunks in a project using text query with pagination."""
+        """Search for chunks in a project using text query with pagination and metadata filtering."""
         if page < 1:
             raise ValueError("Page number must be greater than 0")
         if page_size < 1:
@@ -528,7 +534,12 @@ class DBFileHandler(FileHandler):
         )[0]
 
         return self.search_chunks_by_embedding(
-            project_id, query_embedding, page, page_size, similarity_threshold
+            project_id, 
+            query_embedding, 
+            page, 
+            page_size, 
+            similarity_threshold,
+            metadata_filter=metadata_filter
         )
 
     def search_chunks_by_embedding(
@@ -538,6 +549,7 @@ class DBFileHandler(FileHandler):
         page: int = 1,
         page_size: int = 10,
         similarity_threshold: float = 0.7,
+        metadata_filter: Optional[dict] = None,
     ) -> ChunkResults:
         if page < 1:
             raise ValueError("Page number must be greater than 0")
@@ -563,13 +575,28 @@ class DBFileHandler(FileHandler):
             # Also mark threshold as a float literal if needed
             threshold_expr = literal(similarity_threshold, type_=Float)
 
-            # Build query
+            # Build base query
             base_query = (
                 select(self.Chunk, similarity_expr)
                 .join(self.File)
                 .where(self.File.project_id == project_id)
                 .where(similarity_expr >= threshold_expr)  # numeric comparison
             )
+
+            # Add metadata filtering if provided
+            if metadata_filter:
+                for key, value in metadata_filter.items():
+                    # Use JSONB containment operator @> to filter metadata
+                    if isinstance(value, list):
+                        # Handle multiple possible values for a key
+                        base_query = base_query.where(
+                            self.Chunk.chunk_metadata[key].astext.in_([str(v) for v in value])
+                        )
+                    else:
+                        # Handle single value
+                        base_query = base_query.where(
+                            self.Chunk.chunk_metadata[key].astext == str(value)
+                        )
 
             # Count how many total rows match
             count_query = select(func.count()).select_from(base_query.subquery())
