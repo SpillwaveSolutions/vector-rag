@@ -21,33 +21,43 @@ logger = logging.getLogger(__name__)
 
 def init_database():
     """Initialize database with all required schemas and indexes."""
+    from vector_rag.db.db_model import DbBase, ChunkDB
+    
     engine = create_engine(DB_URL)
 
-    # Get the SQL scripts directory
-    sql_dir = Path(__file__).parent.parent.parent / "db" / "sql" / "ddl"
-
     try:
-        # Execute all SQL files in order
-        for sql_file in sorted(sql_dir.glob("*.sql")):
-            logger.info(f"Executing {sql_file.name}")
+        # Create vector extension first
+        with engine.connect() as conn:
+            conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+            conn.commit()
 
-            # Read and parametrize the SQL
-            sql = sql_file.read_text()
-            sql = sql.replace(":vector_index_lists", str(VECTOR_INDEX_LISTS))
+        # Set embedding dimension from config
+        if config.EMBEDDINGS_DIM:
+            ChunkDB.set_embedding_dimension(config.EMBEDDINGS_DIM)
+            logger.info(f"Set embedding dimension to {config.EMBEDDINGS_DIM}")
 
-            # Execute the SQL script
-            with engine.connect() as conn:
-                # Split on semicolon to handle multiple statements
-                statements = sql.split(";")
-                for statement in statements:
-                    if statement.strip():
-                        try:
-                            conn.execute(text(statement))
-                            conn.commit()
-                        except Exception as e:
-                            logger.warning(f"Error executing statement: {e}")
-                            # Continue with next statement as some might be conditional
-                            continue
+        # Create tables
+        DbBase.metadata.create_all(engine)
+        logger.info("Created database tables")
+
+        # Execute any additional SQL scripts
+        sql_dir = Path(__file__).parent.parent.parent / "db" / "sql" / "ddl"
+        if sql_dir.exists():
+            for sql_file in sorted(sql_dir.glob("*.sql")):
+                logger.info(f"Executing {sql_file.name}")
+                sql = sql_file.read_text()
+                sql = sql.replace(":vector_index_lists", str(VECTOR_INDEX_LISTS))
+                
+                with engine.connect() as conn:
+                    statements = sql.split(";")
+                    for statement in statements:
+                        if statement.strip():
+                            try:
+                                conn.execute(text(statement))
+                                conn.commit()
+                            except Exception as e:
+                                logger.warning(f"Error executing statement: {e}")
+                                continue
 
         logger.info("Database initialization completed successfully")
 

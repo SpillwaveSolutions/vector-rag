@@ -45,10 +45,10 @@ class File(BaseModel):
 class Chunk(BaseModel):
     """Chunk model."""
 
-    target_size: PositiveInt
+    target_size: PositiveInt = Field(default=1000)  # Default chunk target size
     content: str
-    index: NonNegativeInt
-    meta_data: MetaDataDict = {}
+    index: NonNegativeInt = Field(default=0)  # Default index
+    meta_data: MetaDataDict = Field(default_factory=dict)
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 

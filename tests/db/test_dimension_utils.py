@@ -1,5 +1,3 @@
-"""Test dimension utilities."""
-
 import pytest
 from sqlalchemy import text
 

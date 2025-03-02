@@ -18,6 +18,7 @@ from ..embeddings import Embedder, OpenAIEmbedder
 from .base_file_handler import FileHandler
 from .db_model import ChunkDB, DbBase, FileDB, ProjectDB
 from .dimension_utils import ensure_vector_dimension
+from ..embeddings.sentence_transformers_embedder import SentenceTransformersEmbedder
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +45,7 @@ class DBFileHandler(FileHandler):
             raise ValueError("Database URL must be provided")
 
         self.engine = create_engine(config.DB_URL)
-        self.embedder = embedder or OpenAIEmbedder(config)
+        self.embedder = embedder or SentenceTransformersEmbedder(config)
         self.Session = sessionmaker(bind=self.engine)
         self.chunker: Chunker
 
@@ -63,7 +64,13 @@ class DBFileHandler(FileHandler):
 
         # Ensure vector dimension matches embedder if provided
         if self.embedder:
-            ensure_vector_dimension(self.engine, self.embedder.get_dimension())
+            embedder_dim = self.embedder.get_dimension()
+            if config.EMBEDDINGS_DIM and embedder_dim != config.EMBEDDINGS_DIM:
+                raise ValueError(
+                    f"Embedder dimension ({embedder_dim}) does not match "
+                    f"configured dimension ({config.EMBEDDINGS_DIM})"
+                )
+            ensure_vector_dimension(self.engine, embedder_dim)
 
     @contextmanager
     def session_scope(self):

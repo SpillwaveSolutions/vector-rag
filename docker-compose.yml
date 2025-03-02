@@ -1,6 +1,6 @@
 services:
   db:
-    image: ankane/pgvector
+    image: pgvector/pgvector:pg17
     env_file: .env
     environment:
       POSTGRES_DB: ${DB_NAME:-vectordb}

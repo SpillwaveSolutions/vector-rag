@@ -10,7 +10,7 @@ from .base import Embedder
 class MockEmbedder(Embedder):
     """Mock embedder that returns random vectors."""
 
-    def __init__(self, model_name: str = "mock", dimension: int = 1536):
+    def __init__(self, model_name: str = "mock", dimension: int = 384):
         """Initialize mock embedder.
 
         Args:

@@ -1,5 +1,3 @@
-"""Test OpenAI embedder."""
-
 import os
 from unittest.mock import Mock, patch
 

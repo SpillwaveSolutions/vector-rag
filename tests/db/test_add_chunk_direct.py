@@ -12,7 +12,7 @@ TEST_DB_NAME = config.TEST_DB_NAME
 @pytest.fixture
 def db_handler(test_db):
     """Create a DBFileHandler with test database."""
-    return DBFileHandler.create(TEST_DB_NAME, embedder=MockEmbedder())
+    return DBFileHandler.create(TEST_DB_NAME, embedder=MockEmbedder(dimension=384))
 
 
 def test_add_chunk(db_handler):

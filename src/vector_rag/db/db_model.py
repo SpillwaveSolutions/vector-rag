@@ -5,11 +5,15 @@ from datetime import datetime
 from datetime import timezone as tz
 from typing import List, Optional
 
+import os
 from pgvector.sqlalchemy import Vector  # type: ignore
 from sqlalchemy import (BigInteger, Column, DateTime, ForeignKey, Integer,
                         String, Text, UniqueConstraint)
+
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+
+from vector_rag.config import Config
 
 
 class DbBase(DeclarativeBase):
@@ -83,7 +87,18 @@ class ChunkDB(DbBase):
         Integer, ForeignKey("files.id", ondelete="CASCADE")
     )
     content: Mapped[str] = mapped_column(Text, nullable=False)
-    embedding: Mapped[List[float]] = mapped_column(Vector(int(os.getenv("EMBEDDINGS_DIM", 1536))))  # type: ignore
+    embedding: Mapped[List[float]] = mapped_column(Vector(None))  # Dimension will be set during initialization
+
+    @classmethod
+    def set_embedding_dimension(cls, dimension: int):
+        """Set the embedding dimension for the chunks table.
+        
+        Args:
+            dimension: The dimension size for the vector column
+        """
+        if dimension <= 0:
+            raise ValueError("Embedding dimension must be positive")
+        cls.embedding.type.dimension = dimension
     chunk_index: Mapped[int] = mapped_column(Integer, nullable=False)
     chunk_metadata: Mapped[dict] = mapped_column(JSONB, default={})
     created_at: Mapped[datetime] = mapped_column(

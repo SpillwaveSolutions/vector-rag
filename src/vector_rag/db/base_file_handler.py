@@ -3,9 +3,6 @@ from typing import List, Optional
 
 from vector_rag.model import ChunkResults, File, Project
 
-from .db_model import FileDB, ProjectDB
-
-
 class FileHandler(ABC):
     """Abstract base class for file handling operations."""
 

@@ -1,5 +1,3 @@
-"""Test semantic search functionality."""
-
 import numpy as np
 import pytest
 from sqlalchemy import text
@@ -12,7 +10,7 @@ from vector_rag.embeddings import MockEmbedder
 from vector_rag.model import File
 
 config = Config()
-EMBEDDINGS_DIM = config.EMBEDDINGS_DIM
+EMBEDDINGS_DIM = 384
 TEST_DB_NAME = config.TEST_DB_NAME
 TEST_DB_URL = config.TEST_DB_URL
 
@@ -20,18 +18,16 @@ TEST_DB_URL = config.TEST_DB_URL
 @pytest.fixture
 def mock_embedder():
     """Create a mock embedder with consistent embeddings for testing."""
-
     class TestEmbedder(MockEmbedder):
         def embed_texts(self, texts):
             # Return predictable embeddings with correct dtype and shape
             return [
                 np.array(
                     [float(len(t.content)) / 100] * self.dimension, dtype=">f4"
-                )  # big-endian float32
+                )
                 for t in texts
             ]
-
-    return TestEmbedder(dimension=EMBEDDINGS_DIM)
+    return TestEmbedder(dimension=384)
 
 
 @pytest.fixture
@@ -45,7 +41,7 @@ def test_files():
             content=f"Test content {'x\n' * (i * 10)}" * (i + 1),
             meta_data={"type": "test"},
         )
-        for i in range(5)  # Creates 5 files of increasing size
+        for i in range(5)
     ]
 
 
@@ -53,7 +49,7 @@ def test_files():
 def populated_handler(test_db, mock_embedder, test_files):
     """Create a handler with test data."""
     # Ensure vector dimensions match
-    ensure_vector_dimension(test_db, EMBEDDINGS_DIM)
+    ensure_vector_dimension(test_db, 384)
 
     handler = DBFileHandler.create(
         TEST_DB_NAME, mock_embedder, chunker=LineChunker.create(5, 0)

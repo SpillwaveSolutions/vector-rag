@@ -81,7 +81,7 @@ class Config:
         )
 
         # Vector dimensions and search configuration
-        self.EMBEDDINGS_DIM = int(self.get_or_default("EMBEDDINGS_DIM", "1536"))
+        self.EMBEDDINGS_DIM = int(self.get_or_default("EMBEDDINGS_DIM", "384"))
         self.VECTOR_INDEX_LISTS = self.get_or_default("VECTOR_INDEX_LISTS", [100])
         self.VECTOR_INDEX_PROBES = int(self.get_or_default("VECTOR_INDEX_PROBES", "10"))
         self.DEFAULT_SIMILARITY_THRESHOLD = float(

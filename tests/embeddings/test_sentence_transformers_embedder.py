@@ -1,5 +1,3 @@
-"""Test SentenceTransformers embedder."""
-
 import pytest
 from vector_rag.embeddings.sentence_transformers_embedder import SentenceTransformersEmbedder
 from vector_rag.model import Chunk
