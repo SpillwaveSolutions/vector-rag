@@ -20,7 +20,7 @@ tasks:
     desc: "Install package and dependencies using Poetry"
     deps: [install-poetry]
     cmds:
-      - poetry install
+      - poetry install --with sentence-transformers
 
   setup-dev:
     desc: "Set up the local dev environment with Poetry"

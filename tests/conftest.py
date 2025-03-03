@@ -1,11 +1,14 @@
-import importlib
 import os
 import sys
+import uuid
 from pathlib import Path
 import subprocess
 import time
+from random import random
 
-from vector_rag.db.db_model import DbBase, ChunkDB
+from vector_rag.chunking import LineChunker
+from vector_rag.db import ensure_vector_dimension, DBFileHandler
+from vector_rag.model import File
 
 # Add src directory to Python path
 src_path = str(Path(__file__).parents[1] / "src")
@@ -17,7 +20,14 @@ from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
 
 from vector_rag.config import Config
+import numpy as np
 from vector_rag.embeddings import MockEmbedder
+# Check if SentenceTransformersEmbedder is available
+try:
+    from vector_rag.embeddings import SentenceTransformersEmbedder
+    SENTENCE_TRANSFORMERS_AVAILABLE = True
+except ImportError:
+    SENTENCE_TRANSFORMERS_AVAILABLE = False
 
 # Load environment variables from .env file
 env_path = Path('../../.env')
@@ -101,6 +111,19 @@ def pytest_addoption(parser):
         choices=["openai", "sentence"],
         help="Choose embedding type: openai (1536 dimensions) or sentence (384 dimensions)"
     )
+    parser.addoption(
+        "--db-reset",
+        action="store",
+        default="module",
+        choices=["module", "function"],
+        help="Control database reset frequency: module (faster) or function (more isolated)"
+    )
+
+def pytest_configure(config):
+    config.addinivalue_line(
+        "markers",
+        "db_reset(scope): control database reset frequency for test group"
+    )
 
 @pytest.fixture
 def embedding_group(request):
@@ -109,20 +132,34 @@ def embedding_group(request):
         return "openai"
     return "sentence"
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def mock_embedder(request):
-    """
-    Create a mock embedder for testing.
-    If the test is marked with 'openai', returns an embedder with 1536 dimensions;
-    otherwise, returns one with 384 dimensions.
-    """
+    """Create a mock embedder with consistent embeddings for testing."""
+    class TestEmbedder(MockEmbedder):
+        def embed_texts(self, texts):
+            # Return predictable embeddings with correct dtype and shape
+            return [
+                np.array(
+                    [float(len(t.content)) / 100] * self.dimension, dtype=">f4"
+                )
+                for t in texts
+            ]
+    
+    # Determine dimension based on markers
     if request.node.get_closest_marker("openai"):
-        return MockEmbedder(dimension=1536)
-    else:
-        return MockEmbedder(dimension=384)
+        return TestEmbedder(dimension=1536)
+    return TestEmbedder(dimension=384)
 
-@pytest.fixture(scope="function")
-def test_db(request):
+@pytest.fixture
+def sentence_transformers_embedder():
+    """Create a SentenceTransformers embedder for testing."""
+    if not SENTENCE_TRANSFORMERS_AVAILABLE:
+        pytest.skip("sentence_transformers package not installed")
+    config = Config(LOCAL_EMBEDDING=True)
+    return SentenceTransformersEmbedder(config)
+
+@pytest.fixture(scope="session")
+def session_test_db(request):
     """Create test database with appropriate vector dimension based on test markers."""
     setup_test_env()
     
@@ -158,11 +195,14 @@ def test_db(request):
 
     yield test_engine
 
-    # Cleanup using perform_db_reset
-    perform_db_reset()
+    # Only cleanup once at end of session
+    if request.session.testsfailed:
+        print("\nSome tests failed - preserving test database for debugging")
+    else:
+        perform_db_reset()
 
-@pytest.fixture
-def db_handler(request, test_db):
+@pytest.fixture(scope="module")
+def module_db_handler(request, session_test_db):
     """Create a DBFileHandler with appropriate configuration."""
     from vector_rag.db.db_file_handler import DBFileHandler
     
@@ -183,6 +223,67 @@ def db_handler(request, test_db):
         embedder = None
         
     return DBFileHandler(config, embedder=embedder)
+
+
+@pytest.fixture
+def test_files():
+    """Create test files with different content lengths."""
+    return [
+        File(
+            name=f"test{i}.txt",
+            path=f"/path/to/test{i}.txt",
+            crc=f"crc{i}",
+            content=f"Test content {'x' * (i * 10)}\n" * (i + 1),
+            meta_data={"type": "test"},
+        )
+        for i in range(5)
+    ]
+
+
+@pytest.fixture(scope="module")
+def test_files_with_metadata():
+    """Create test files with different metadata."""
+    return [
+        File(
+            name=f"test{i}.txt",
+            path=f"/path/to/test{i}.txt",
+            crc=f"crc{i}",
+            content=f"Test content {'x' * (i * 10)}\n" * (i + 1),
+            meta_data={
+                "type": "test",
+                "category": "technical" if i % 2 == 0 else "non-technical",
+                "source": "manual" if i < 3 else "auto-generated",
+                "priority": str(i % 3 + 1)  # "1", "2", or "3"
+            },
+        )
+        for i in range(6)
+    ]
+
+@pytest.fixture(scope="module")
+def module_populated_handler_with_metadata(session_test_db, mock_embedder, test_files_with_metadata):
+    """Create a handler with test data containing metadata."""
+    # Ensure vector dimensions match
+    ensure_vector_dimension(session_test_db, 384)
+
+    handler = DBFileHandler.create(
+        config.TEST_DB_NAME, mock_embedder, chunker=LineChunker.create(5, 0)
+    )
+    project = handler.create_project(f"Test Project with Metadata {str(uuid.uuid4())}")
+
+    # Add test files and verify metadata was stored
+    for file in test_files_with_metadata:
+        file_record = handler.add_file(project.id, file)
+        assert file_record is not None
+
+        # Verify chunks were created with correct metadata
+        with handler.session_scope() as session:
+            chunks = session.query(handler.Chunk).filter_by(file_id=file_record.id).all()
+            assert len(chunks) > 0, "No chunks were created for the file"
+            for chunk in chunks:
+                assert chunk.chunk_metadata == file.meta_data, \
+                    f"Chunk metadata mismatch: {chunk.chunk_metadata} != {file.meta_data}"
+
+    return handler, project.id
 
 @pytest.fixture(scope="module")
 def db_reset():

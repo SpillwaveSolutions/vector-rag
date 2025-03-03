@@ -1,70 +1,20 @@
 import numpy as np
 import pytest
-from sqlalchemy import text
 
 from vector_rag.chunking import LineChunker
 from vector_rag.config import Config
 from vector_rag.db.db_file_handler import DBFileHandler
 from vector_rag.db.dimension_utils import ensure_vector_dimension
-from vector_rag.embeddings import MockEmbedder
 from vector_rag.model import File
 
 config = Config()
 EMBEDDINGS_DIM = 384
 
 
-@pytest.fixture
-def mock_embedder():
-    """Create a mock embedder with consistent embeddings for testing."""
-    class TestEmbedder(MockEmbedder):
-        def embed_texts(self, texts):
-            # Return predictable embeddings with correct dtype and shape
-            return [
-                np.array(
-                    [float(len(t.content)) / 100] * self.dimension, dtype=">f4"
-                )
-                for t in texts
-            ]
-    return TestEmbedder(dimension=384)
-
-
-@pytest.fixture
-def test_files():
-    """Create test files with different content lengths."""
-    return [
-        File(
-            name=f"test{i}.txt",
-            path=f"/path/to/test{i}.txt",
-            crc=f"crc{i}",
-            content=f"Test content {'x\n' * (i * 10)}" * (i + 1),
-            meta_data={"type": "test"},
-        )
-        for i in range(5)
-    ]
-
-
-@pytest.fixture
-def populated_handler(test_db, mock_embedder, test_files):
-    """Create a handler with test data."""
-    # Ensure vector dimensions match
-    ensure_vector_dimension(test_db, 384)
-
-    handler = DBFileHandler.create(
-        config.TEST_DB_NAME, mock_embedder, chunker=LineChunker.create(5, 0)
-    )
-    project = handler.create_project("Test Project")
-
-    # Add test files
-    for file in test_files:
-        file_record = handler.add_file(project.id, file)
-        assert file_record is not None
-
-    return handler, project.id
-
-
-def test_search_by_text_basic(populated_handler):
+@pytest.mark.db_reset(scope="module")
+def test_search_by_text_basic(module_populated_handler_with_metadata):
     """Test basic text search functionality."""
-    handler, project_id = populated_handler
+    handler, project_id = module_populated_handler_with_metadata
 
     results = handler.search_chunks_by_text(
         project_id=project_id,
@@ -81,9 +31,9 @@ def test_search_by_text_basic(populated_handler):
     assert results.page == 1
 
 
-def test_search_by_embedding_basic(populated_handler, mock_embedder):
+def test_search_by_embedding_basic(module_populated_handler_with_metadata, mock_embedder):
     """Test basic embedding search functionality."""
-    handler, project_id = populated_handler
+    handler, project_id = module_populated_handler_with_metadata
 
     # Create a test embedding with correct dtype
     test_embedding = np.array([0.5] * mock_embedder.get_dimension(), dtype=">f4")
@@ -101,9 +51,9 @@ def test_search_by_embedding_basic(populated_handler, mock_embedder):
     assert all(0 <= r.score <= 1 for r in results.results)
 
 
-def test_pagination(populated_handler):
+def test_pagination(module_populated_handler_with_metadata):
     """Test pagination functionality."""
-    handler, project_id = populated_handler
+    handler, project_id = module_populated_handler_with_metadata
 
     # Get first page
     page1 = handler.search_chunks_by_text(
@@ -137,9 +87,9 @@ def test_pagination(populated_handler):
     # assert not page1_ids.intersection(page2_ids) TODO fix this
 
 
-def test_search_with_threshold(populated_handler):
+def test_search_with_threshold(module_populated_handler_with_metadata):
     """Test search with similarity threshold."""
-    handler, project_id = populated_handler
+    handler, project_id = module_populated_handler_with_metadata
 
     # Search with high threshold
     high_threshold_results = handler.search_chunks_by_text(
@@ -155,9 +105,9 @@ def test_search_with_threshold(populated_handler):
     assert all(r.score >= 0.9 for r in high_threshold_results.results)
 
 
-def test_search_invalid_project(populated_handler):
+def test_search_invalid_project(module_populated_handler_with_metadata):
     """Test search with invalid project ID."""
-    handler, _ = populated_handler
+    handler, _ = module_populated_handler_with_metadata
 
     results = handler.search_chunks_by_text(
         project_id=99999, query_text="Test query"  # Invalid project ID
@@ -167,9 +117,9 @@ def test_search_invalid_project(populated_handler):
     assert len(results.results) == 0
 
 
-def test_search_invalid_page(populated_handler):
+def test_search_invalid_page(module_populated_handler_with_metadata):
     """Test search with invalid page parameters."""
-    handler, project_id = populated_handler
+    handler, project_id = module_populated_handler_with_metadata
 
     # Test invalid page number
     with pytest.raises(ValueError, match="Page number must be greater than 0"):
@@ -188,9 +138,9 @@ def test_search_invalid_page(populated_handler):
         )
 
 
-def test_ordering(populated_handler):
+def test_ordering(module_populated_handler_with_metadata):
     """Test that results are properly ordered by similarity."""
-    handler, project_id = populated_handler
+    handler, project_id = module_populated_handler_with_metadata
 
     results = handler.search_chunks_by_text(
         project_id=project_id,
@@ -204,9 +154,9 @@ def test_ordering(populated_handler):
     assert scores == sorted(scores, reverse=True)
 
 
-def test_empty_results(populated_handler):
+def test_empty_results(module_populated_handler_with_metadata):
     """Test handling of empty results."""
-    handler, project_id = populated_handler
+    handler, project_id = module_populated_handler_with_metadata
 
     # Search with impossibly high threshold
     results = handler.search_chunks_by_text(
@@ -222,9 +172,9 @@ def test_empty_results(populated_handler):
     assert results.total_pages == 0
 
 
-def test_last_page(populated_handler):
+def test_last_page(module_populated_handler_with_metadata):
     """Test behavior of last page."""
-    handler, project_id = populated_handler
+    handler, project_id = module_populated_handler_with_metadata
 
     # Get total count with a large page size
     full_results = handler.search_chunks_by_text(

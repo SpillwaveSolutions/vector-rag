@@ -2,10 +2,17 @@
 Downloads and caches the model locally for offline use, running on the local CPU or GPU.
 """
 
-import torch
+import importlib.util
 from typing import List, Optional
 
-from sentence_transformers import SentenceTransformer
+# Check if required packages are installed
+sentence_transformers_available = importlib.util.find_spec("sentence_transformers") is not None
+torch_available = importlib.util.find_spec("torch") is not None
+
+# Only import if available
+if sentence_transformers_available and torch_available:
+    import torch
+    from sentence_transformers import SentenceTransformer
 
 from ..config import Config
 from ..model import Chunk
@@ -22,6 +29,17 @@ class SentenceTransformersEmbedder(Embedder):
             config: Configuration object. If not provided, a default Config will be used.
             batch_size: Number of texts to encode in a batch.
         """
+        if not sentence_transformers_available or not torch_available:
+            missing = []
+            if not sentence_transformers_available:
+                missing.append("sentence_transformers")
+            if not torch_available:
+                missing.append("torch")
+            raise ImportError(
+                f"Required packages {', '.join(missing)} not installed. "
+                f"Please install with: pip install {' '.join(missing)}"
+            )
+            
         if config is None:
             config = Config()
         model_name = "sentence-transformers/all-MiniLM-L12-v2"

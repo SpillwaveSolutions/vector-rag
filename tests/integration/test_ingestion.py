@@ -4,8 +4,6 @@ from pathlib import Path
 import pytest
 
 from vector_rag.config import Config
-from vector_rag.embeddings.mock_embedder import MockEmbedder
-from vector_rag.db.db_file_handler import DBFileHandler
 from vector_rag.model import File
 
 config = Config()
@@ -24,9 +22,9 @@ def unique_name():
     return f"Test Project {uuid.uuid4()}"
 
 @pytest.mark.sentence
-def test_file_ingestion(db_handler, sample_file, unique_name):
+def test_file_ingestion(module_db_handler, sample_file, unique_name):
     """Test complete file ingestion flow."""
-    handler = db_handler
+    handler = module_db_handler
     # Create project
     project = handler.create_project(unique_name)
     assert project is not None
@@ -46,9 +44,9 @@ def test_file_ingestion(db_handler, sample_file, unique_name):
             assert len(chunk.embedding) == handler.embedder.get_dimension()
 
 @pytest.mark.no_embeddings
-def test_project_uniqueness(db_handler, unique_name):
+def test_project_uniqueness(module_db_handler, unique_name):
     """Test project name uniqueness constraints."""
-    handler = db_handler
+    handler = module_db_handler
 
     # Create initial project
     project1 = handler.create_project(unique_name)
@@ -74,9 +72,9 @@ def test_project_uniqueness(db_handler, unique_name):
     assert project3.description == new_description
 
 @pytest.mark.no_embeddings
-def test_multiple_projects(db_handler):
+def test_multiple_projects(module_db_handler):
     """Test creating multiple projects with different names."""
-    handler = db_handler
+    handler = module_db_handler
 
     # Create multiple projects
     names = [f"Project {i}" for i in range(3)]
