@@ -32,7 +32,7 @@ def create_test_file(content="Test content", name="test.txt", path="/path/to/tes
         path=path,
         crc=str(hash(content)),  # Simple hash for testing
         content=content,
-        meta_data={},
+        metadata={},
     )
 
 @pytest.mark.sentence

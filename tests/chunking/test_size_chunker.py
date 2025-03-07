@@ -13,7 +13,7 @@ def sample_file():
         content="This is a test file. It contains multiple sentences. "
         "We will use it to test the SizeChunker class. "
         "The chunker should split this text based on character size.",
-        meta_data={"type": "test"},
+        metadata={"type": "test"},
     )
 
 
@@ -56,7 +56,7 @@ def test_size_chunker_small_content():
         path="/path/to/small.txt",
         crc="small123",
         content="Short text",
-        meta_data={},
+        metadata={},
     )
     chunker = SizeChunker.create(chunk_size=50, overlap=10)
     chunks = chunker.chunk_text(small_file)
@@ -71,7 +71,7 @@ def test_size_chunker_empty_content():
         path="/path/to/empty.txt",
         crc="empty123",
         content="",
-        meta_data={},
+        metadata={},
     )
     chunker = SizeChunker.create(chunk_size=50, overlap=10)
     chunks = chunker.chunk_text(empty_file)

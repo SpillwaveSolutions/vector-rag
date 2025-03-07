@@ -13,7 +13,7 @@ def sample_file():
         crc="abcdef123456",
         content="This is a test file with multiple words. It has several sentences. "
         "This content will definitely span across multiple chunks when we use a small chunk size.",
-        meta_data={"type": "test"},
+        metadata={"type": "test"},
         file_size=None,
     )
 

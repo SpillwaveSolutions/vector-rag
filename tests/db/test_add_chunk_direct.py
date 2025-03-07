@@ -51,7 +51,7 @@ def test_add_chunk_with_metadata(module_db_handler):
     # Create a chunk with metadata
     metadata = {"source": "test_file", "page": 1, "importance": "high"}
     chunk = Chunk(
-        target_size=100, content="Test chunk content", index=0, meta_data=metadata
+        target_size=100, content="Test chunk content", index=0, metadata=metadata
     )
 
     # Add the chunk
@@ -62,4 +62,4 @@ def test_add_chunk_with_metadata(module_db_handler):
     assert isinstance(result, Chunk)
     assert result.content == chunk.content
     assert result.index == chunk.index
-    assert result.meta_data == metadata
+    assert result.metadata == metadata

@@ -234,7 +234,7 @@ def test_files():
             path=f"/path/to/test{i}.txt",
             crc=f"crc{i}",
             content=f"Test content {'x' * (i * 10)}\n" * (i + 1),
-            meta_data={"type": "test"},
+            metadata={"type": "test"},
         )
         for i in range(5)
     ]
@@ -249,7 +249,7 @@ def test_files_with_metadata():
             path=f"/path/to/test{i}.txt",
             crc=f"crc{i}",
             content=f"Test content {'x' * (i * 10)}\n" * (i + 1),
-            meta_data={
+            metadata={
                 "type": "test",
                 "category": "technical" if i % 2 == 0 else "non-technical",
                 "source": "manual" if i < 3 else "auto-generated",
@@ -280,8 +280,8 @@ def module_populated_handler_with_metadata(session_test_db, mock_embedder, test_
             chunks = session.query(handler.Chunk).filter_by(file_id=file_record.id).all()
             assert len(chunks) > 0, "No chunks were created for the file"
             for chunk in chunks:
-                assert chunk.chunk_metadata == file.meta_data, \
-                    f"Chunk metadata mismatch: {chunk.chunk_metadata} != {file.meta_data}"
+                assert chunk.chunk_metadata == file.metadata, \
+                    f"Chunk metadata mismatch: {chunk.chunk_metadata} != {file.metadata}"
 
     return handler, project.id
 

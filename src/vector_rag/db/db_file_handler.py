@@ -209,7 +209,7 @@ class DBFileHandler(FileHandler):
                         content=chunk.content,
                         embedding=embedding,
                         chunk_index=chunk.index,
-                        chunk_metadata=chunk.meta_data,
+                        chunk_metadata=chunk.metadata,
                     )
                     session.add(chunk_db)
 
@@ -218,7 +218,7 @@ class DBFileHandler(FileHandler):
                         target_size=chunk.target_size,
                         content=chunk_db.content,
                         index=chunk_db.chunk_index,
-                        meta_data=chunk_db.chunk_metadata,
+                        metadata=chunk_db.chunk_metadata,
                     ))
 
                 session.flush()
@@ -256,7 +256,7 @@ class DBFileHandler(FileHandler):
                     content=chunk.content,
                     embedding=embedding,
                     chunk_index=chunk.index,
-                    chunk_metadata=chunk.meta_data,
+                    chunk_metadata=chunk.metadata,
                 )
                 session.add(chunk_db)
                 session.flush()  # Get chunk_db.id
@@ -266,7 +266,7 @@ class DBFileHandler(FileHandler):
                     target_size=chunk.target_size,
                     content=chunk_db.content,
                     index=chunk_db.chunk_index,
-                    meta_data=chunk_db.chunk_metadata,
+                    metadata=chunk_db.chunk_metadata,
                 )
 
             except Exception as e:
@@ -324,7 +324,7 @@ class DBFileHandler(FileHandler):
             chunks: List[Chunk] = self.chunker.chunk_text(file_model)
             # Copy file metadata to each chunk
             for chunk in chunks:
-                chunk.meta_data = file_model.meta_data.copy()
+                chunk.metadata = file_model.metadata.copy()
             
             embeddings = self.embedder.embed_texts(chunks)
 
@@ -334,7 +334,7 @@ class DBFileHandler(FileHandler):
                     content=chunk.content,
                     embedding=embedding,
                     chunk_index=chunk.index,
-                    chunk_metadata=chunk.meta_data,
+                    chunk_metadata=chunk.metadata,
                 )
                 session.add(chunk_obj)
 
@@ -501,7 +501,7 @@ class DBFileHandler(FileHandler):
                     path=db_file.file_path,
                     crc=db_file.crc,
                     content=content,
-                    meta_data={
+                    metadata={
                         "type": (
                             db_file.filename.split(".")[-1]
                             if "." in db_file.filename
@@ -620,7 +620,7 @@ class DBFileHandler(FileHandler):
                             target_size=1,
                             content=chunk_row.content,
                             index=chunk_row.chunk_index,
-                            meta_data=chunk_row.chunk_metadata,
+                            metadata=chunk_row.chunk_metadata,
                         ),
                     )
                 )

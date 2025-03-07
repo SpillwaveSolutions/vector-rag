@@ -17,7 +17,7 @@ def debug_chunker(chunker: Chunker, text: Union[str, File]):
             path="/debug/debug.md",
             crc="debug123",
             content=text,
-            meta_data={},
+            metadata={},
         )
     else:
         file = text

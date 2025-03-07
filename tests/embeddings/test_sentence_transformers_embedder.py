@@ -10,7 +10,7 @@ def test_sentence_transformer_dimension(sentence_transformers_embedder):
 
 def test_embed_single_text(module_db_handler):
     """Test embedding a single text chunk."""
-    chunk = Chunk(content="This is a test sentence.", meta_data={})
+    chunk = Chunk(content="This is a test sentence.", metadata={})
     embeddings = module_db_handler.embedder.embed_texts([chunk])
     
     assert len(embeddings) == 1
@@ -19,9 +19,9 @@ def test_embed_single_text(module_db_handler):
 def test_embed_multiple_texts(module_db_handler):
     """Test embedding multiple text chunks."""
     chunks = [
-        Chunk(content="First test sentence.", meta_data={}),
-        Chunk(content="Second test sentence.", meta_data={}),
-        Chunk(content="Third test sentence.", meta_data={})
+        Chunk(content="First test sentence.", metadata={}),
+        Chunk(content="Second test sentence.", metadata={}),
+        Chunk(content="Third test sentence.", metadata={})
     ]
     embeddings = module_db_handler.embedder.embed_texts(chunks)
     
@@ -30,7 +30,7 @@ def test_embed_multiple_texts(module_db_handler):
 
 def test_batch_processing(module_db_handler):
     """Test that batching works correctly."""
-    chunks = [Chunk(content=f"Test sentence {i}.", meta_data={}) for i in range(20)]
+    chunks = [Chunk(content=f"Test sentence {i}.", metadata={}) for i in range(20)]
     embeddings = module_db_handler.embedder.embed_texts(chunks)
     
     assert len(embeddings) == 20

@@ -21,7 +21,7 @@ def sample_file():
         path="/path/to/test.txt",
         crc="abcdef123456",
         content="\n".join([f"Line {i}" for i in range(10)]),
-        meta_data={"type": "test"},
+        metadata={"type": "test"},
     )
 
 
@@ -61,7 +61,7 @@ def test_empty_text(chunker):
         path="/path/to/empty.txt",
         crc="empty123",
         content="content",
-        meta_data={},
+        metadata={},
     )
     chunks = chunker.chunk_text(empty_file)
     assert len(chunks) == 1
@@ -75,7 +75,7 @@ def test_whitespace_text(chunker):
         path="/path/to/whitespace.txt",
         crc="space123",
         content="   \n  \n  ",
-        meta_data={},
+        metadata={},
     )
     chunks = chunker.chunk_text(whitespace_file)
     assert len(chunks) == 1
@@ -89,7 +89,7 @@ def test_single_line(chunker):
         path="/path/to/single.txt",
         crc="single123",
         content="Single line",
-        meta_data={},
+        metadata={},
     )
     chunks = chunker.chunk_text(single_line_file)
     assert len(chunks) == 1
@@ -103,7 +103,7 @@ def test_text_smaller_than_chunk(chunker):
         path="/path/to/small.txt",
         crc="small123",
         content="\n".join([f"Line {i}" for i in range(5)]),
-        meta_data={},
+        metadata={},
     )
     chunker = LineChunker.create(chunk_size=10, overlap=5)
     chunks = chunker.chunk_text(small_file)
@@ -118,7 +118,7 @@ def test_no_overlap(chunker):
         path="/path/to/test.txt",
         crc="test123",
         content="\n".join([f"Line {i}" for i in range(6)]),
-        meta_data={},
+        metadata={},
     )
     chunker = LineChunker.create(chunk_size=2, overlap=0)
     chunks = chunker.chunk_text(file)

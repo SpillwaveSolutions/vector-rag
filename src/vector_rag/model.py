@@ -27,7 +27,7 @@ class File(BaseModel):
     path: str = Field(..., min_length=1, max_length=255)
     crc: str
     content: Optional[str] = None
-    meta_data: Dict[str, str] = Field(default_factory=dict)
+    metadata: Dict[str, str] = Field(default_factory=dict)
     file_size: Optional[NonNegativeInt] = None
 
     @property
@@ -48,7 +48,7 @@ class Chunk(BaseModel):
     target_size: PositiveInt = Field(default=1000)  # Default chunk target size
     content: str
     index: NonNegativeInt = Field(default=0)  # Default index
-    meta_data: MetaDataDict = Field(default_factory=dict)
+    metadata: MetaDataDict = Field(default_factory=dict)
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 

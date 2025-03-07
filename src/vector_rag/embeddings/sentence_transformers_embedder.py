@@ -42,7 +42,11 @@ class SentenceTransformersEmbedder(Embedder):
             
         if config is None:
             config = Config()
-        model_name = "sentence-transformers/all-MiniLM-L12-v2"
+        if config.EMBEDDINGS_MODEL != "text-embedding-3-small":  # Default
+            model_name = f"sentence-transformers/{config.EMBEDDINGS_MODEL}"
+        else:
+            model_name = "sentence-transformers/all-MiniLM-L12-v2"
+
         dimension = config.get_or_default("EMBEDDINGS_DIM", 384)
         super().__init__(model_name, dimension)
         device = "cuda" if torch.cuda.is_available() else "cpu"
