@@ -17,6 +17,7 @@ class VectorRAGAPI:
         page: int = 1,
         page_size: int = 10,
         similarity_threshold: float = 0.7,
+        file_id: int = None,
         metadata_filter: Optional[dict] = None
     ) -> ChunkResults:
         """
@@ -28,6 +29,7 @@ class VectorRAGAPI:
             page: Page number for paginated results
             page_size: Number of results per page
             similarity_threshold: Minimum similarity score (0.0 to 1.0)
+            file_id: ID of the file to search within
             metadata_filter: Optional dictionary of metadata key-value pairs to filter by
             
         Returns:
@@ -39,6 +41,7 @@ class VectorRAGAPI:
             page=page,
             page_size=page_size,
             similarity_threshold=similarity_threshold,
+            file_id=file_id,
             metadata_filter=metadata_filter
         )
         
@@ -49,6 +52,7 @@ class VectorRAGAPI:
         page: int = 1,
         page_size: int = 10,
         similarity_threshold: float = 0.7,
+        file_id: int = None,
         metadata_filter: Optional[dict] = None
     ) -> ChunkResults:
         """
@@ -60,6 +64,7 @@ class VectorRAGAPI:
             page: Page number for paginated results
             page_size: Number of results per page
             similarity_threshold: Minimum similarity score (0.0 to 1.0)
+            file_id: ID of the file to search within
             metadata_filter: Optional dictionary of metadata key-value pairs to filter by
             
         Returns:
@@ -70,5 +75,7 @@ class VectorRAGAPI:
             embedding=embedding,
             page=page,
             page_size=page_size,
-            similarity_threshold=similarity_threshold
+            similarity_threshold=similarity_threshold,
+            file_id = file_id,
+            metadata_filter=metadata_filter
         )
