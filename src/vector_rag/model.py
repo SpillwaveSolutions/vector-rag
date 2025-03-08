@@ -27,7 +27,7 @@ class File(BaseModel):
     path: str = Field(..., min_length=1, max_length=255)
     crc: str
     content: Optional[str] = None
-    metadata: Dict[str, str] = Field(default_factory=dict)
+    metadata: Optional[Dict[str, str|int|float|Dict|List]] = Field(default_factory=dict)
     file_size: Optional[NonNegativeInt] = None
 
     @property

@@ -5,10 +5,18 @@ from pathlib import Path
 import subprocess
 import time
 from random import random
+import logging
 
 from vector_rag.chunking import LineChunker
 from vector_rag.db import ensure_vector_dimension, DBFileHandler
 from vector_rag.model import File
+from vector_rag.logging_config import configure_logging
+
+# Configure logging at the start of test session
+configure_logging(logging.DEBUG)
+
+# Force output to be unbuffered
+sys.stdout.reconfigure(line_buffering=True)
 
 # Add src directory to Python path
 src_path = str(Path(__file__).parents[1] / "src")
