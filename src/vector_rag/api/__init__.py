@@ -70,12 +70,12 @@ class VectorRAGAPI:
         Returns:
             ChunkResults containing matching chunks and metadata
         """
-        return self.handler.search_chunks_by_embedding(
+        return self.handler.search_chunks_by_embeddng(
             project_id=project_id,
             embedding=embedding,
             page=page,
             page_size=page_size,
             similarity_threshold=similarity_threshold,
-            file_id = file_id,
+            file_id=file_id,
             metadata_filter=metadata_filter
         )
