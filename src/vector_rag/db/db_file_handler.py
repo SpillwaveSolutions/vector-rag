@@ -11,6 +11,7 @@ from sqlalchemy import Float, create_engine, func, literal, select, text
 from sqlalchemy.orm import sessionmaker
 
 from vector_rag.model import Chunk, ChunkResult, ChunkResults, File, Project
+from .. import config
 
 from ..chunking import LineChunker
 from ..chunking.base_chunker import Chunker
@@ -23,29 +24,28 @@ from ..embeddings.sentence_transformers_embedder import SentenceTransformersEmbe
 
 logger = logging.getLogger(__name__)
 
-
 class DBFileHandler(FileHandler):
     """Handler for managing files in the database."""
 
     from sqlalchemy import event
     from sqlalchemy.engine import Engine
-    import time
 
-    # Force sql logging - TODO: lets add a sql-debug env var for this
-    @event.listens_for(Engine, "before_cursor_execute")
-    def before_cursor_execute(conn, cursor, statement, parameters, context, executemany):
-        conn.info.setdefault('query_start_time', []).append(time.time())
-        print(f"SQL: {statement}")
-        print(f"Parameters: {parameters}")
+    # Only enable SQL logging if SQL_DEBUG_LOGGING is set to true
+    if config.get_or_default('SQL_DEBUG_LOGGING', '').lower() == 'true':
+        @event.listens_for(Engine, "before_cursor_execute")
+        def before_cursor_execute(conn, cursor, statement, parameters, context, executemany):
+            conn.info.setdefault('query_start_time', []).append(time.time())
+            print(f"SQL: {statement}")
+            print(f"Parameters: {parameters}")
 
-    @event.listens_for(Engine, "after_cursor_execute")
-    def after_cursor_execute(conn, cursor, statement, parameters, context, executemany):
-        total = time.time() - conn.info['query_start_time'].pop(-1)
-        print(f"Total time: {total:.2f}s")
+        @event.listens_for(Engine, "after_cursor_execute")
+        def after_cursor_execute(conn, cursor, statement, parameters, context, executemany):
+            total = time.time() - conn.info['query_start_time'].pop(-1)
+            print(f"Total time: {total:.2f}s")
 
     def __init__(
         self,
-        config: Config = Config(),
+        config: Config = None,
         embedder: Optional[Embedder] = None,
         chunker: Optional[Chunker] = None,
     ):
@@ -58,6 +58,7 @@ class DBFileHandler(FileHandler):
         Raises:
             ValueError: If db_url is None
         """
+
         if config.DB_URL is None:
             raise ValueError("Database URL must be provided")
 
@@ -734,5 +735,5 @@ class DBFileHandler(FileHandler):
         embedder: Optional[Embedder] = None,
         chunker: Optional[Chunker] = None,
     ):
-        config = Config(DB_NAME=db_name)
+        config.set_override('DB_NAME', db_name)
         return DBFileHandler(config, embedder, chunker)

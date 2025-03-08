@@ -1,13 +1,13 @@
 from typing import List, Optional
+from vector_rag import config
 from vector_rag.model import ChunkResults
 from vector_rag.db.db_file_handler import DBFileHandler
-from vector_rag.config import Config
 
 class VectorRAGAPI:
     """Simplified API overlay for vector RAG search operations."""
     
-    def __init__(self, config: Optional[Config] = None):
-        self.config = config or Config()
+    def __init__(self):
+        self.config = config
         self.handler = DBFileHandler(config=self.config)
         
     def search_text(

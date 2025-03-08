@@ -153,6 +153,11 @@ class Config:
         """Convert string log level to logging constant."""
         return getattr(logging, level.upper(), logging.INFO)
 
+    def set_override(self, key: str, value: Any) -> None:
+        if self._config_overrides.get(key) is not None:
+            print(f"NOTE: Config overriding {key} from {self._config_overrides.get(key)} to {value}")
+            self._config_overrides[key] = value
+
     def get_or_default(self, name: str, default_value: Any) -> Any:
         """Get configuration value from various sources.
 
