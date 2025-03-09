@@ -9,7 +9,15 @@ class VectorRAGAPI:
     def __init__(self):
         self.config = config
         self.handler = DBFileHandler(config=self.config)
-        
+
+    def query(self,
+              project_id: int,
+              file_id: int = None,
+              query_text: str = None,
+              metadata_filter: Optional[dict] = None
+    ) -> ChunkResults:
+        return self.handler.query(project_id, file_id, query_text, metadata_filter)
+
     def search_text(
         self,
         project_id: int,
@@ -70,7 +78,8 @@ class VectorRAGAPI:
         Returns:
             ChunkResults containing matching chunks and metadata
         """
-        return self.handler.search_chunks_by_embeddng(
+
+        return self.handler.search_chunks_by_embedding(
             project_id=project_id,
             embedding=embedding,
             page=page,
