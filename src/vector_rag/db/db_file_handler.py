@@ -554,6 +554,55 @@ class DBFileHandler(FileHandler):
 
             return files
 
+    def get_chunks(self,
+              project_id: int,
+              file_id: int = None,
+              ) -> ChunkResults:
+        with self.session_scope() as session:
+
+            # Build base query
+            base_query = (
+                select(self.Chunk)
+                .join(self.File)
+                .where(self.File.project_id == project_id)
+                .where(self.File.id == file_id)
+            )
+
+            # Count how many total rows match
+            count_query = select(func.count()).select_from(base_query.subquery())
+            total_count = session.execute(count_query).scalar() or 0
+
+            # Direct print for debugging
+            print(f"DEBUG: Found {total_count} total matching chunks for file {file_id} in project {project_id}")
+
+            # Execute the query
+            results = session.execute(base_query).all()
+
+            logger.debug(f"Found {len(results)} results")
+            # Convert to your Pydantic "ChunkResults"
+            chunk_results = []
+            for row in results:
+                # Extract the ChunkDB object from the row
+                chunk_db = row[0]  # First element is the ChunkDB object
+                chunk_results.append(
+                    ChunkResult(
+                        score=1,
+                        chunk=Chunk(
+                            target_size=1,
+                            content=chunk_db.content,
+                            index=chunk_db.chunk_index,
+                            metadata=chunk_db.chunk_metadata,
+                        ),
+                    )
+                )
+
+            return ChunkResults(
+                results=chunk_results,
+                total_count=total_count,
+                page=1,
+                page_size=len(chunk_results) or 1,
+            )
+
     def query(self,
               project_id: int,
               file_id: int = None,
