@@ -554,6 +554,113 @@ class DBFileHandler(FileHandler):
 
             return files
 
+    def query(self,
+              project_id: int,
+              file_id: int = None,
+              query_text: str = None,
+              metadata_filter: Optional[dict] = None
+              ) -> ChunkResults:
+        with self.session_scope() as session:
+
+            # Build base query
+            base_query = (
+                select(self.Chunk)
+                .join(self.File)
+                .where(self.File.project_id == project_id)
+            )
+
+            if query_text:
+                base_query = base_query.where(self.Chunk.content.ilike(query_text.lower()))
+
+            if file_id:
+                base_query = base_query.where(self.File.id == file_id)
+
+            # Add metadata filtering if provided
+            if metadata_filter:
+                logger.info(f"Applying metadata filter: {metadata_filter}")
+                for key, value in metadata_filter.items():
+                    # Handle nested JSON objects
+                    if isinstance(value, dict):
+                        logger.debug(f"Filtering for nested object {key}: {value}")
+                        # Create a JSON object for containment check
+                        json_obj = {key: value}
+                        # Use JSONB containment operator @> for nested objects
+                        base_query = base_query.where(
+                            self.Chunk.chunk_metadata.op('@>')(json_obj)
+                        )
+                    # Handle lists of values
+                    elif isinstance(value, list):
+                        logger.debug(f"Filtering for multiple values of {key}: {value}")
+
+                        # Check if we're looking for a value in a list field
+                        if len(value) == 1:
+                            # We might be looking for a single value in a list field
+                            # Use the JSONB containment operator @> for this
+                            logger.debug(f"Checking if list field contains value: {value[0]}")
+                            json_obj = {key: value}
+                            base_query = base_query.where(
+                                self.Chunk.chunk_metadata.op('@>')(json_obj)
+                            )
+                        else:
+                            # We're looking for multiple possible values for this key
+                            # Use OR conditions for multiple possible values
+                            from sqlalchemy import or_
+                            conditions = []
+
+                            # Try both direct equality and containment for arrays
+                            for val in value:
+                                # Direct equality check
+                                conditions.append(self.Chunk.chunk_metadata[key].astext == str(val))
+
+                                # Check if the value is in a JSON array
+                                json_obj = {key: [val]}
+                                conditions.append(self.Chunk.chunk_metadata.op('@>')(json_obj))
+
+                            base_query = base_query.where(or_(*conditions))
+                    # Handle simple key-value pairs
+                    else:
+                        logger.debug(f"Filtering for {key}={value}")
+                        base_query = base_query.where(
+                            self.Chunk.chunk_metadata[key].astext == str(value)
+                        )
+
+            # Print the query for debugging
+            print(f"DEBUG: Performing search with metadata filter: {metadata_filter}")
+            logger.debug(f"Performing search: base_query: {base_query}")
+
+            # Count how many total rows match
+            count_query = select(func.count()).select_from(base_query.subquery())
+            total_count = session.execute(count_query).scalar() or 0
+
+            # Direct print for debugging
+            print(f"DEBUG: Found {total_count} total matching rows for query")
+
+            # Pagination
+            results = session.execute().all()
+
+            logger.debug(f"Found {len(results)} results")
+            # Convert to your Pydantic "ChunkResults"
+            chunk_results = []
+            for chunk_row, similarity in results:
+                chunk_results.append(
+                    ChunkResult(
+                        score=float(similarity),
+                        chunk=Chunk(
+                            target_size=1,
+                            content=chunk_row.content,
+                            index=chunk_row.chunk_index,
+                            metadata=chunk_row.chunk_metadata,
+                        ),
+                    )
+                )
+
+            return ChunkResults(
+                results=chunk_results,
+                total_count=total_count,
+                page=1,
+                page_size=len(chunk_results),
+            )
+
     def search_chunks_by_text(
         self,
         project_id: int,
