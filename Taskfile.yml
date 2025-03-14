@@ -20,7 +20,7 @@ tasks:
     desc: "Install package and dependencies using Poetry"
     deps: [install-poetry]
     cmds:
-      - poetry install
+      - poetry install --with sentence-transformers
 
   setup-dev:
     desc: "Set up the local dev environment with Poetry"
@@ -31,7 +31,7 @@ tasks:
         if command -v poetry &> /dev/null; then
           POETRY_CMD="poetry"
         else
-          POETRY_CMD="/Users/cmathias/.local/bin/poetry"
+          POETRY_CMD="~/.local/bin/poetry"
         fi
         $POETRY_CMD env use python3.12
         $POETRY_CMD install --with dev

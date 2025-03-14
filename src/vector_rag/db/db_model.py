@@ -13,8 +13,6 @@ from sqlalchemy import (BigInteger, Column, DateTime, ForeignKey, Integer,
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
-from vector_rag.config import Config
-
 
 class DbBase(DeclarativeBase):
     """Base class for all models."""

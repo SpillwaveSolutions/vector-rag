@@ -69,7 +69,7 @@ def create_file_model(file_path: str) -> FileModel:
         path=str(path),
         crc=crc,
         content=content,
-        meta_data={"type": path.suffix.lstrip(".")},
+        metadata={"type": path.suffix.lstrip(".")},
     )
 
 

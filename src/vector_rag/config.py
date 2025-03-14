@@ -19,6 +19,7 @@ class Config:
         DB_HOST: Optional[str] = None,
         DB_PORT: Optional[int] = None,
         DB_NAME: Optional[str] = None,
+        TEST_DB_NAME: Optional[str] = None,
         OPENAI_API_KEY: Optional[str] = None,
         EMBEDDINGS_MODEL: Optional[str] = None,
         LOG_LEVEL: Optional[str] = None,
@@ -46,6 +47,7 @@ class Config:
             "DB_HOST": DB_HOST,
             "DB_PORT": DB_PORT,
             "DB_NAME": DB_NAME,
+            "TEST_DB_NAME": TEST_DB_NAME,
             "OPENAI_API_KEY": OPENAI_API_KEY,
             "EMBEDDINGS_MODEL": EMBEDDINGS_MODEL,
             "LOG_LEVEL": LOG_LEVEL,
@@ -99,7 +101,7 @@ class Config:
         ).split(",")
 
         # Test configuration
-        self.TEST_DB_NAME = "vectordb_test"
+        self.TEST_DB_NAME = self.get_or_default("TEST_DB_NAME", "vectordb_test")
 
         # Logging configuration
         self.LOG_LEVEL = self.get_or_default("LOG_LEVEL", "INFO")
@@ -150,6 +152,11 @@ class Config:
     def _get_log_level(self, level: str) -> int:
         """Convert string log level to logging constant."""
         return getattr(logging, level.upper(), logging.INFO)
+
+    def set_override(self, key: str, value: Any) -> None:
+        if self._config_overrides.get(key) is not None:
+            print(f"NOTE: Config overriding {key} from {self._config_overrides.get(key)} to {value}")
+            self._config_overrides[key] = value
 
     def get_or_default(self, name: str, default_value: Any) -> Any:
         """Get configuration value from various sources.

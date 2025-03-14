@@ -1,15 +1,17 @@
 """Database file handler for managing projects and files."""
 
 import logging
+import time
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from typing import List, Optional, Sequence, Union
 
 import numpy as np
-from sqlalchemy import Float, create_engine, func, literal, select
+from sqlalchemy import Float, create_engine, func, literal, select, text
 from sqlalchemy.orm import sessionmaker
 
 from vector_rag.model import Chunk, ChunkResult, ChunkResults, File, Project
+from .. import config
 
 from ..chunking import LineChunker
 from ..chunking.base_chunker import Chunker
@@ -22,13 +24,28 @@ from ..embeddings.sentence_transformers_embedder import SentenceTransformersEmbe
 
 logger = logging.getLogger(__name__)
 
-
 class DBFileHandler(FileHandler):
     """Handler for managing files in the database."""
 
+    from sqlalchemy import event
+    from sqlalchemy.engine import Engine
+
+    # Only enable SQL logging if SQL_DEBUG_LOGGING is set to true
+    if config.get_or_default('SQL_DEBUG_LOGGING', '').lower() == 'true':
+        @event.listens_for(Engine, "before_cursor_execute")
+        def before_cursor_execute(conn, cursor, statement, parameters, context, executemany):
+            conn.info.setdefault('query_start_time', []).append(time.time())
+            print(f"SQL: {statement}")
+            print(f"Parameters: {parameters}")
+
+        @event.listens_for(Engine, "after_cursor_execute")
+        def after_cursor_execute(conn, cursor, statement, parameters, context, executemany):
+            total = time.time() - conn.info['query_start_time'].pop(-1)
+            print(f"Total time: {total:.2f}s")
+
     def __init__(
         self,
-        config: Config = Config(),
+        config: Config = None,
         embedder: Optional[Embedder] = None,
         chunker: Optional[Chunker] = None,
     ):
@@ -41,10 +58,12 @@ class DBFileHandler(FileHandler):
         Raises:
             ValueError: If db_url is None
         """
+
         if config.DB_URL is None:
             raise ValueError("Database URL must be provided")
 
         self.engine = create_engine(config.DB_URL)
+        self.create_tables_and_indexes()
         self.embedder = embedder or SentenceTransformersEmbedder(config)
         self.Session = sessionmaker(bind=self.engine)
         self.chunker: Chunker
@@ -59,8 +78,7 @@ class DBFileHandler(FileHandler):
         self.File = FileDB
         self.Chunk = ChunkDB
 
-        # Ensure tables exist
-        DbBase.metadata.create_all(self.engine)
+
 
         # Ensure vector dimension matches embedder if provided
         if self.embedder:
@@ -71,6 +89,29 @@ class DBFileHandler(FileHandler):
                     f"configured dimension ({config.EMBEDDINGS_DIM})"
                 )
             ensure_vector_dimension(self.engine, embedder_dim)
+
+    def create_tables_and_indexes(self):
+        DbBase.metadata.create_all(self.engine)
+
+        # Create indexes for array fields and unique constraint for metadata within a chunk
+        with self.engine.connect() as connection:
+            # Enable required extensions for text search and array operations
+            connection.execute(text("""
+                CREATE EXTENSION IF NOT EXISTS pg_trgm;
+                CREATE EXTENSION IF NOT EXISTS btree_gin;
+            """))
+            connection.commit()
+
+        with self.engine.connect() as connection:
+            # Check if indexes already exist before creating them
+            connection.execute(text("""
+                -- Create GIN indexes for JSONB metadata
+                CREATE INDEX IF NOT EXISTS idx_chunk_metadata ON chunks USING gin (chunk_metadata);
+                
+                -- Create index for text search on metadata (no lower function needed)
+                CREATE INDEX IF NOT EXISTS idx_chunk_metadata_gin_ops ON chunks USING gin (chunk_metadata jsonb_path_ops);
+            """))
+            connection.commit()
 
     @contextmanager
     def session_scope(self):
@@ -209,7 +250,7 @@ class DBFileHandler(FileHandler):
                         content=chunk.content,
                         embedding=embedding,
                         chunk_index=chunk.index,
-                        chunk_metadata=chunk.meta_data,
+                        chunk_metadata=chunk.metadata,
                     )
                     session.add(chunk_db)
 
@@ -218,7 +259,7 @@ class DBFileHandler(FileHandler):
                         target_size=chunk.target_size,
                         content=chunk_db.content,
                         index=chunk_db.chunk_index,
-                        meta_data=chunk_db.chunk_metadata,
+                        metadata=chunk_db.chunk_metadata,
                     ))
 
                 session.flush()
@@ -256,7 +297,7 @@ class DBFileHandler(FileHandler):
                     content=chunk.content,
                     embedding=embedding,
                     chunk_index=chunk.index,
-                    chunk_metadata=chunk.meta_data,
+                    chunk_metadata=chunk.metadata,
                 )
                 session.add(chunk_db)
                 session.flush()  # Get chunk_db.id
@@ -266,7 +307,7 @@ class DBFileHandler(FileHandler):
                     target_size=chunk.target_size,
                     content=chunk_db.content,
                     index=chunk_db.chunk_index,
-                    meta_data=chunk_db.chunk_metadata,
+                    metadata=chunk_db.chunk_metadata,
                 )
 
             except Exception as e:
@@ -320,8 +361,12 @@ class DBFileHandler(FileHandler):
             session.add(file)
             session.flush()  # Get file.id
 
-            # Create chunks
+            # Create chunks and preserve metadata
             chunks: List[Chunk] = self.chunker.chunk_text(file_model)
+            # Copy file metadata to each chunk
+            for chunk in chunks:
+                chunk.metadata = file_model.metadata.copy()
+            
             embeddings = self.embedder.embed_texts(chunks)
 
             for chunk, embedding in zip(chunks, embeddings):
@@ -330,6 +375,7 @@ class DBFileHandler(FileHandler):
                     content=chunk.content,
                     embedding=embedding,
                     chunk_index=chunk.index,
+                    chunk_metadata=chunk.metadata,
                 )
                 session.add(chunk_obj)
 
@@ -496,7 +542,7 @@ class DBFileHandler(FileHandler):
                     path=db_file.file_path,
                     crc=db_file.crc,
                     content=content,
-                    meta_data={
+                    metadata={
                         "type": (
                             db_file.filename.split(".")[-1]
                             if "." in db_file.filename
@@ -515,20 +561,31 @@ class DBFileHandler(FileHandler):
         page: int = 1,
         page_size: int = 10,
         similarity_threshold: float = 0.7,
+        file_id: int = None,
+        metadata_filter: Optional[dict] = None,
     ) -> ChunkResults:
-        """Search for chunks in a project using text query with pagination."""
+        """Search for chunks in a project using text query with pagination and metadata filtering."""
         if page < 1:
             raise ValueError("Page number must be greater than 0")
         if page_size < 1:
             raise ValueError("Page size must be greater than 1")
 
         # Get embedding for query text
+        logger.info(f"Creating embedding for query: '{query_text}'")
+        logger.debug(f"Metadata filter: {metadata_filter}")
+        print(f"DEBUG: Creating embedding for query: '{query_text}' with metadata filter: {metadata_filter}")
         query_embedding = self.embedder.embed_texts(
             [Chunk(target_size=1, content=query_text, index=0)]
         )[0]
 
         return self.search_chunks_by_embedding(
-            project_id, query_embedding, page, page_size, similarity_threshold
+            project_id, 
+            query_embedding, 
+            page, 
+            page_size, 
+            similarity_threshold,
+            file_id,
+            metadata_filter=metadata_filter
         )
 
     def search_chunks_by_embedding(
@@ -538,12 +595,18 @@ class DBFileHandler(FileHandler):
         page: int = 1,
         page_size: int = 10,
         similarity_threshold: float = 0.7,
+        file_id: int = None,
+        metadata_filter: Optional[dict] = None,
     ) -> ChunkResults:
         if page < 1:
             raise ValueError("Page number must be greater than 0")
         if page_size < 1:
             raise ValueError("Page size must be greater than 1")
 
+        logger.info(f"Searching with embedding in project {project_id}")
+        logger.debug(f"Metadata filter: {metadata_filter}")
+        logger.debug(f"Similarity threshold: {similarity_threshold}")
+        
         # Ensure `embedding` is a 1D float32 (big-endian) array
         if not isinstance(embedding, np.ndarray):
             embedding = np.array(embedding, dtype=">f4")
@@ -563,7 +626,7 @@ class DBFileHandler(FileHandler):
             # Also mark threshold as a float literal if needed
             threshold_expr = literal(similarity_threshold, type_=Float)
 
-            # Build query
+            # Build base query
             base_query = (
                 select(self.Chunk, similarity_expr)
                 .join(self.File)
@@ -571,9 +634,68 @@ class DBFileHandler(FileHandler):
                 .where(similarity_expr >= threshold_expr)  # numeric comparison
             )
 
+            if file_id:
+                base_query = base_query.where(self.File.id == file_id)
+
+            # Add metadata filtering if provided
+            if metadata_filter:
+                logger.info(f"Applying metadata filter: {metadata_filter}")
+                for key, value in metadata_filter.items():
+                    # Handle nested JSON objects
+                    if isinstance(value, dict):
+                        logger.debug(f"Filtering for nested object {key}: {value}")
+                        # Create a JSON object for containment check
+                        json_obj = {key: value}
+                        # Use JSONB containment operator @> for nested objects
+                        base_query = base_query.where(
+                            self.Chunk.chunk_metadata.op('@>')(json_obj)
+                        )
+                    # Handle lists of values
+                    elif isinstance(value, list):
+                        logger.debug(f"Filtering for multiple values of {key}: {value}")
+                        
+                        # Check if we're looking for a value in a list field
+                        if len(value) == 1:
+                            # We might be looking for a single value in a list field
+                            # Use the JSONB containment operator @> for this
+                            logger.debug(f"Checking if list field contains value: {value[0]}")
+                            json_obj = {key: value}
+                            base_query = base_query.where(
+                                self.Chunk.chunk_metadata.op('@>')(json_obj)
+                            )
+                        else:
+                            # We're looking for multiple possible values for this key
+                            # Use OR conditions for multiple possible values
+                            from sqlalchemy import or_
+                            conditions = []
+                            
+                            # Try both direct equality and containment for arrays
+                            for val in value:
+                                # Direct equality check
+                                conditions.append(self.Chunk.chunk_metadata[key].astext == str(val))
+                                
+                                # Check if the value is in a JSON array
+                                json_obj = {key: [val]}
+                                conditions.append(self.Chunk.chunk_metadata.op('@>')(json_obj))
+                            
+                            base_query = base_query.where(or_(*conditions))
+                    # Handle simple key-value pairs
+                    else:
+                        logger.debug(f"Filtering for {key}={value}")
+                        base_query = base_query.where(
+                            self.Chunk.chunk_metadata[key].astext == str(value)
+                        )
+            
+            # Print the query for debugging
+            print(f"DEBUG: Performing search with metadata filter: {metadata_filter}")
+            logger.debug(f"Performing search: base_query: {base_query}")
+
             # Count how many total rows match
             count_query = select(func.count()).select_from(base_query.subquery())
             total_count = session.execute(count_query).scalar() or 0
+            
+            # Direct print for debugging
+            print(f"DEBUG: Found {total_count} total matching rows for query")
 
             # Pagination
             offset = (page - 1) * page_size
@@ -583,6 +705,7 @@ class DBFileHandler(FileHandler):
                 .limit(page_size)
             ).all()
 
+            logger.debug(f"Found {len(results)} results")
             # Convert to your Pydantic "ChunkResults"
             chunk_results = []
             for chunk_row, similarity in results:
@@ -593,7 +716,7 @@ class DBFileHandler(FileHandler):
                             target_size=1,
                             content=chunk_row.content,
                             index=chunk_row.chunk_index,
-                            meta_data=chunk_row.chunk_metadata,
+                            metadata=chunk_row.chunk_metadata,
                         ),
                     )
                 )
@@ -612,5 +735,5 @@ class DBFileHandler(FileHandler):
         embedder: Optional[Embedder] = None,
         chunker: Optional[Chunker] = None,
     ):
-        config = Config(DB_NAME=db_name)
+        config.set_override('DB_NAME', db_name)
         return DBFileHandler(config, embedder, chunker)

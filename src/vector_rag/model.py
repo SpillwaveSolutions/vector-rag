@@ -4,11 +4,9 @@ from typing import Any, Dict, List, Optional, Union
 
 from pydantic import BaseModel, ConfigDict, Field, NonNegativeInt, PositiveInt
 
-AnyValue = Union[str, int, float, List[str], Dict[str, Any]]
-AnyValue1 = Union[str, int, float, List[str], Dict[str, AnyValue]]
-AnyValue2 = Union[str, int, float, List[str], Dict[str, AnyValue1]]
-AnyValue3 = Union[str, int, float, List[str], Dict[str, AnyValue2]]
-MetaDataDict = Dict[str, AnyValue3]
+# Define a more flexible metadata type that can handle complex nested structures
+# and None values
+MetaDataDict = Dict[str, Any]
 
 
 class Project(BaseModel):
@@ -27,7 +25,7 @@ class File(BaseModel):
     path: str = Field(..., min_length=1, max_length=255)
     crc: str
     content: Optional[str] = None
-    meta_data: Dict[str, str] = Field(default_factory=dict)
+    metadata: Optional[MetaDataDict] = Field(default_factory=dict)
     file_size: Optional[NonNegativeInt] = None
 
     @property
@@ -48,9 +46,12 @@ class Chunk(BaseModel):
     target_size: PositiveInt = Field(default=1000)  # Default chunk target size
     content: str
     index: NonNegativeInt = Field(default=0)  # Default index
-    meta_data: MetaDataDict = Field(default_factory=dict)
+    metadata: MetaDataDict = Field(default_factory=dict)
 
-    model_config = ConfigDict(arbitrary_types_allowed=True)
+    model_config = ConfigDict(
+        arbitrary_types_allowed=True,
+        extra="allow"  # Allow extra fields in the model
+    )
 
     @property
     def size(self) -> int:
