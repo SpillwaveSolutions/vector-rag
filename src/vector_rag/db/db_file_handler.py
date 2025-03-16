@@ -674,10 +674,24 @@ class DBFileHandler(FileHandler):
                         from sqlalchemy import cast
 
                         # For direct key-value comparison at the top level
-                        json_obj = {key: value}
-                        base_query = base_query.where(
-                            self.Chunk.chunk_metadata.op('@>')(json_obj)
-                        )
+                        # Convert value to string if it's a number to match JSON string storage
+                        if isinstance(value, (int, float)):
+                            # Try both string and numeric representations
+                            from sqlalchemy import or_
+                            str_value = str(value)
+                            json_obj_str = {key: str_value}
+                            json_obj_num = {key: value}
+                            base_query = base_query.where(
+                                or_(
+                                    self.Chunk.chunk_metadata.op('@>')(json_obj_str),
+                                    self.Chunk.chunk_metadata.op('@>')(json_obj_num)
+                                )
+                            )
+                        else:
+                            json_obj = {key: value}
+                            base_query = base_query.where(
+                                self.Chunk.chunk_metadata.op('@>')(json_obj)
+                            )
 
             # Print the query for debugging
             print(f"DEBUG: Performing search with metadata filter: {metadata_filter}")
@@ -860,11 +874,24 @@ class DBFileHandler(FileHandler):
                         # Use SQLAlchemy's JSON operators for proper JSON path handling
                         from sqlalchemy.dialects.postgresql import JSONB
 
-                        # For direct key-value comparison at the top level
-                        json_obj = {key: value}
-                        base_query = base_query.where(
-                            self.Chunk.chunk_metadata.op('@>')(json_obj)
-                        )
+                        # Convert value to string if it's a number to match JSON string storage
+                        if isinstance(value, (int, float)):
+                            # Try both string and numeric representations
+                            from sqlalchemy import or_
+                            str_value = str(value)
+                            json_obj_str = {key: str_value}
+                            json_obj_num = {key: value}
+                            base_query = base_query.where(
+                                or_(
+                                    self.Chunk.chunk_metadata.op('@>')(json_obj_str),
+                                    self.Chunk.chunk_metadata.op('@>')(json_obj_num)
+                                )
+                            )
+                        else:
+                            json_obj = {key: value}
+                            base_query = base_query.where(
+                                self.Chunk.chunk_metadata.op('@>')(json_obj)
+                            )
             
             # Print the query for debugging
             print(f"DEBUG: Performing search with metadata filter: {metadata_filter}")

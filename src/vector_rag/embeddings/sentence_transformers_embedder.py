@@ -72,8 +72,15 @@ class SentenceTransformersEmbedder(Embedder):
             List[List[float]]: List of embeddings, one per text.
         """
         texts = [chunk.content for chunk in chunks]
-        embeddings = self.model.encode(texts, batch_size=self.batch_size, show_progress_bar=False)
-        return embeddings.tolist()
+        # In sentence-transformers 3.x, encode method returns a tensor by default
+        embeddings = self.model.encode(
+            texts, 
+            batch_size=self.batch_size, 
+            show_progress_bar=False,
+            convert_to_tensor=True
+        )
+        # Convert to numpy and then to list
+        return embeddings.cpu().numpy().tolist()
 
     @classmethod
     def create(

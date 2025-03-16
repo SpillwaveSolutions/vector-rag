@@ -106,7 +106,7 @@ def test_search_by_embedding_with_metadata(module_populated_handler_with_metadat
 
     # Verify metadata filtering worked
     for result in high_priority_results.results:
-        assert result.chunk.metadata["priority"] == "3"
+        assert str(result.chunk.metadata["priority"]) == str(3)
 
     for result in auto_tech_results.results:
         assert result.chunk.metadata["category"] == "technical"
@@ -309,9 +309,9 @@ def test_metadata_filtering_consistency(module_populated_handler_with_metadata, 
     test_cases = [
         {"filter": {"category": "technical"}, "expected_count": 3},
         {"filter": {"source": "manual"}, "expected_count": 3},
-        {"filter": {"priority": "2"}, "expected_count": 2},
+        {"filter": {"priority": 2}, "expected_count": 2},
         {"filter": {"category": "technical", "source": "manual"}, "expected_count": 2},
-        {"filter": {"category": "non-technical", "priority": "3"}, "expected_count": 2},
+        {"filter": {"category": "non-technical", "priority": 3}, "expected_count": 2},
     ]
 
     for case in test_cases:
@@ -342,5 +342,5 @@ def test_metadata_filtering_consistency(module_populated_handler_with_metadata, 
                     assert result.chunk.metadata[key] in value, \
                         f"Metadata mismatch in {key}: {result.chunk.metadata[key]} not in {value}"
                 else:
-                    assert result.chunk.metadata[key] == value, \
+                    assert str(result.chunk.metadata[key]) == str(value), \
                         f"Metadata mismatch in {key}: {result.chunk.metadata[key]} != {value}"
