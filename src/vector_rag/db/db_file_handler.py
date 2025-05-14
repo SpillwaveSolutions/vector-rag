@@ -1,7 +1,8 @@
 """Database file handler for managing projects and files."""
-
+import json
 import logging
 import time
+import traceback
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from typing import List, Optional, Sequence, Union
@@ -554,6 +555,230 @@ class DBFileHandler(FileHandler):
 
             return files
 
+    def get_chunks(self,
+              project_id: int,
+              file_id: int = None,
+              ) -> ChunkResults:
+        with self.session_scope() as session:
+
+            # Build base query
+            base_query = (
+                select(self.Chunk)
+                .join(self.File)
+                .where(self.File.project_id == project_id)
+                .where(self.File.id == file_id)
+            )
+
+            # Count how many total rows match
+            count_query = select(func.count()).select_from(base_query.subquery())
+            total_count = session.execute(count_query).scalar() or 0
+
+            # Direct print for debugging
+            print(f"DEBUG: Found {total_count} total matching chunks for file {file_id} in project {project_id}")
+
+            # Execute the query
+            results = session.execute(base_query).all()
+
+            logger.debug(f"Found {len(results)} results")
+            # Convert to your Pydantic "ChunkResults"
+            chunk_results = []
+            for row in results:
+                # Extract the ChunkDB object from the row
+                chunk_db = row[0]  # First element is the ChunkDB object
+                chunk_results.append(
+                    ChunkResult(
+                        score=1,
+                        chunk=Chunk(
+                            target_size=1,
+                            content=chunk_db.content,
+                            index=chunk_db.chunk_index,
+                            metadata=chunk_db.chunk_metadata,
+                        ),
+                    )
+                )
+
+            return ChunkResults(
+                results=chunk_results,
+                total_count=total_count,
+                page=1,
+                page_size=len(chunk_results) or 1,
+            )
+
+    def _apply_metadata_filters(self, base_query, metadata_filter):
+        """
+        Apply metadata filters to a query in a consistent way.
+        
+        Args:
+            base_query: The SQLAlchemy query to modify
+            metadata_filter: Dictionary of metadata filters to apply
+            
+        Returns:
+            Modified SQLAlchemy query with filters applied
+        """
+        if not metadata_filter:
+            return base_query
+            
+        logger.info(f"Applying metadata filter: {metadata_filter}")
+        
+        for key, value in metadata_filter.items():
+            # Handle nested JSON objects
+            if isinstance(value, dict):
+                logger.debug(f"Filtering for nested object {key}: {value}")
+                # Create a JSON object for containment check
+                json_obj = {key: value}
+                # Use JSONB containment operator @> for nested objects
+                base_query = base_query.where(
+                    self.Chunk.chunk_metadata.op('@>')(json_obj)
+                )
+            # Handle dot notation in keys (nested fields)
+            elif "." in key:
+                logger.debug(f"Filtering for nested field with dot notation: {key}={value}")
+                # Split the key by dots to get the path
+                parts = key.split(".")
+                # Build a nested JSON object
+                nested_obj = value
+                for part in reversed(parts[1:]):
+                    nested_obj = {part: nested_obj}
+                json_obj = {parts[0]: nested_obj}
+                # Use JSONB containment operator @> for nested objects
+                base_query = base_query.where(
+                    self.Chunk.chunk_metadata.op('@>')(json_obj)
+                )
+            # Handle lists/arrays of values - improved implementation
+            elif isinstance(value, list):
+                logger.debug(f"Filtering for multiple values of {key}: {value}")
+                
+                if len(value) == 0:
+                    # Empty list, skip this filter
+                    continue
+                elif len(value) == 1:
+                    # Single value in a list - use simple containment
+                    json_obj = {key: value[0]}
+                    base_query = base_query.where(
+                        self.Chunk.chunk_metadata.op('@>')(json_obj)
+                    )
+                else:
+                    # Multiple values - use the ANY operator for better performance
+                    from sqlalchemy import text
+                    
+                    # Convert all values to strings for consistent comparison
+                    str_values = [str(v) for v in value]
+                    
+                    # Use the PostgreSQL ANY operator with text extraction
+                    # This handles the case where the field contains a single value
+                    base_query = base_query.where(
+                        text(f"chunks.chunk_metadata->>'{key}' = ANY(:values)")
+                        .bindparams(values=str_values)
+                    )
+            # Handle simple key-value pairs
+            else:
+                logger.debug(f"Filtering for {key}={value}")
+                
+                # For direct key-value comparison at the top level
+                if isinstance(value, (int, float)):
+                    # Try both string and numeric representations for numbers
+                    from sqlalchemy import or_
+                    str_value = str(value)
+                    json_obj_str = {key: str_value}
+                    json_obj_num = {key: value}
+                    base_query = base_query.where(
+                        or_(
+                            self.Chunk.chunk_metadata.op('@>')(json_obj_str),
+                            self.Chunk.chunk_metadata.op('@>')(json_obj_num)
+                        )
+                    )
+                else:
+                    # String or other value types
+                    json_obj = {key: str(value)}
+                    base_query = base_query.where(
+                        self.Chunk.chunk_metadata.op('@>')(json_obj)
+                    )
+        
+        return base_query
+
+    def query(self,
+              project_id: int,
+              file_id: int = None,
+              query_text: str = None,
+              metadata_filter: Optional[dict] = None
+              ) -> ChunkResults:
+        with self.session_scope() as session:
+
+            # Build base query
+            base_query = (
+                select(self.Chunk)
+                .join(self.File)
+                .where(self.File.project_id == project_id)
+            )
+
+            if query_text:
+                base_query = base_query.where(self.Chunk.content.ilike(f"%{query_text.lower()}%"))
+
+            if file_id:
+                base_query = base_query.where(self.File.id == file_id)
+
+            # Apply metadata filtering using the helper method
+            base_query = self._apply_metadata_filters(base_query, metadata_filter)
+
+            # Print the query for debugging
+            print(f"DEBUG: Performing search with metadata filter: {metadata_filter}")
+
+            # Alternative approach for logging the SQL query
+            from sqlalchemy.dialects import postgresql
+            try:
+                # Get the compiled SQL with placeholders
+                compiled_query = base_query.compile(dialect=postgresql.dialect())
+
+                # For debugging, get the SQL with the params
+                param_dict = {}
+                for k, v in compiled_query.params.items():
+                    if isinstance(v, dict):
+                        param_dict[k] = json.dumps(v)
+                    else:
+                        param_dict[k] = v
+
+                # Log both the SQL and parameters separately
+                logger.debug(f"SQL Query: {compiled_query.string}")
+                logger.debug(f"Parameters: {param_dict}")
+            except Exception as e:
+                logger.warning(f"Could not compile SQL query for debugging: {e}")
+                logger.warning(traceback.format_exc())
+
+            # Count how many total rows match
+            count_query = select(func.count()).select_from(base_query.subquery())
+            total_count = session.execute(count_query).scalar() or 0
+
+            # Direct print for debugging
+            print(f"DEBUG: Found {total_count} total matching rows for query")
+
+            # Execute the query
+            results = session.execute(base_query).all()
+
+            logger.debug(f"Found {len(results)} results")
+            # Convert to your Pydantic "ChunkResults"
+            chunk_results = []
+            for row in results:
+                # Extract the ChunkDB object from the row
+                chunk_db = row[0]  # First element is the ChunkDB object
+                chunk_results.append(
+                    ChunkResult(
+                        score=1,
+                        chunk=Chunk(
+                            target_size=1,
+                            content=chunk_db.content,
+                            index=chunk_db.chunk_index,
+                            metadata=chunk_db.chunk_metadata,
+                        ),
+                    )
+                )
+
+            return ChunkResults(
+                results=chunk_results,
+                total_count=total_count,
+                page=1,
+                page_size=len(chunk_results) or 1,
+            )
+
     def search_chunks_by_text(
         self,
         project_id: int,
@@ -579,10 +804,10 @@ class DBFileHandler(FileHandler):
         )[0]
 
         return self.search_chunks_by_embedding(
-            project_id, 
-            query_embedding, 
-            page, 
-            page_size, 
+            project_id,
+            query_embedding,
+            page,
+            page_size,
             similarity_threshold,
             file_id,
             metadata_filter=metadata_filter
@@ -606,7 +831,7 @@ class DBFileHandler(FileHandler):
         logger.info(f"Searching with embedding in project {project_id}")
         logger.debug(f"Metadata filter: {metadata_filter}")
         logger.debug(f"Similarity threshold: {similarity_threshold}")
-        
+
         # Ensure `embedding` is a 1D float32 (big-endian) array
         if not isinstance(embedding, np.ndarray):
             embedding = np.array(embedding, dtype=">f4")
@@ -637,54 +862,8 @@ class DBFileHandler(FileHandler):
             if file_id:
                 base_query = base_query.where(self.File.id == file_id)
 
-            # Add metadata filtering if provided
-            if metadata_filter:
-                logger.info(f"Applying metadata filter: {metadata_filter}")
-                for key, value in metadata_filter.items():
-                    # Handle nested JSON objects
-                    if isinstance(value, dict):
-                        logger.debug(f"Filtering for nested object {key}: {value}")
-                        # Create a JSON object for containment check
-                        json_obj = {key: value}
-                        # Use JSONB containment operator @> for nested objects
-                        base_query = base_query.where(
-                            self.Chunk.chunk_metadata.op('@>')(json_obj)
-                        )
-                    # Handle lists of values
-                    elif isinstance(value, list):
-                        logger.debug(f"Filtering for multiple values of {key}: {value}")
-                        
-                        # Check if we're looking for a value in a list field
-                        if len(value) == 1:
-                            # We might be looking for a single value in a list field
-                            # Use the JSONB containment operator @> for this
-                            logger.debug(f"Checking if list field contains value: {value[0]}")
-                            json_obj = {key: value}
-                            base_query = base_query.where(
-                                self.Chunk.chunk_metadata.op('@>')(json_obj)
-                            )
-                        else:
-                            # We're looking for multiple possible values for this key
-                            # Use OR conditions for multiple possible values
-                            from sqlalchemy import or_
-                            conditions = []
-                            
-                            # Try both direct equality and containment for arrays
-                            for val in value:
-                                # Direct equality check
-                                conditions.append(self.Chunk.chunk_metadata[key].astext == str(val))
-                                
-                                # Check if the value is in a JSON array
-                                json_obj = {key: [val]}
-                                conditions.append(self.Chunk.chunk_metadata.op('@>')(json_obj))
-                            
-                            base_query = base_query.where(or_(*conditions))
-                    # Handle simple key-value pairs
-                    else:
-                        logger.debug(f"Filtering for {key}={value}")
-                        base_query = base_query.where(
-                            self.Chunk.chunk_metadata[key].astext == str(value)
-                        )
+            # Apply metadata filtering using the helper method
+            base_query = self._apply_metadata_filters(base_query, metadata_filter)
             
             # Print the query for debugging
             print(f"DEBUG: Performing search with metadata filter: {metadata_filter}")
