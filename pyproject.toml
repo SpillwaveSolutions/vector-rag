@@ -1,30 +1,30 @@
- [tool.poetry]                                                                                                                                                                        
- name = "vector-rag"                                                                                                                                                                  
- version = "0.1.1"                                                                                                                                                                    
- description = "RAG (Retrieval-Augmented Generation) System"                                                                                                                          
- authors = ["Richard Hightower <richardhightower@gmail.com>"]                                                                                                                         
- readme = "README.md"                                                                                                                                                                 
- repository = "https://github.com/RichardHightower/rag"                                                                                                                               
- packages = [                                                                                                                                                                         
-     { include = "vector_rag", from = "src" }                                                                                                                                         
- ]                                                                                                                                                                                    
-                                                                                                                                                                                      
- [tool.poetry.dependencies]                                                                                                                                                           
- python = ">=3.10,<3.13"                                                                                                                                                              
- openai = ">=1.58.1,<2.0.0"                                                                                                                                                           
- sqlalchemy = ">=2.0.36,<3.0.0"                                                                                                                                                       
- psycopg2-binary = ">=2.9.10,<3.0.0"                                                                                                                                                  
- pgvector = ">=0.3.6,<0.4.0"                                                                                                                                                          
- python-dotenv = ">=1.0.1,<2.0.0"                                                                                                                                                     
-                                                                                                                                                                                      
- [tool.poetry.group.dev.dependencies]                                                                                                                                                 
- black = ">=24.1.0,<25.0.0"                                                                                                                                                           
- isort = ">=5.13.0,<6.0.0"                                                                                                                                                            
- mypy = ">=1.8.0,<2.0.0"                                                                                                                                                              
- pytest = ">=8.0.0,<9.0.0"                                                                                                                                                            
- pytest-cov = ">=4.1.0,<5.0.0"                                                                                                                                                        
- types-psycopg2 = ">=2.9.21,<3.0.0"
- numpy = ">=1.24.0,<2.0.0"
+[tool.poetry]
+name = "vector-rag"
+version = "1.2.11"
+description = "RAG (Retrieval-Augmented Generation) System"
+authors = ["Richard Hightower <rick@spillwave.com>", "Chris Mathias <chris@spillwave.com>"]
+readme = "README.md"
+repository = "https://github.com/SpillwaveSolutions/vector-rag"
+packages = [
+    { include = "vector_rag", from = "src" }
+]
+
+[tool.poetry.dependencies]
+python = ">=3.10,<3.13"
+openai = ">=1.58.1,<2.0.0"
+sqlalchemy = ">=2.0.36,<3.0.0"
+psycopg2-binary = ">=2.9.10,<3.0.0"
+pgvector = ">=0.3.6,<0.4.0"
+python-dotenv = ">=1.0.1,<2.0.0"
+
+[tool.poetry.group.dev.dependencies]
+black = ">=24.1.0,<25.0.0"
+isort = ">=5.13.0,<6.0.0"
+mypy = ">=1.8.0,<2.0.0"
+pytest = ">=8.0.0,<9.0.0"
+pytest-cov = ">=4.1.0,<5.0.0"
+types-psycopg2 = ">=2.9.21,<3.0.0"
+numpy = ">=1.24.0,<2.0.0"
 
  [tool.poetry.group.sentence-transformers]
  optional = true
@@ -36,6 +36,6 @@
  [tool.poetry.requires-plugins]
  poetry-plugin-export = ">=1.8"
 
- [build-system]                                                                                                                                                                       
- requires = ["poetry-core"]                                                                                                                                                           
- build-backend = "poetry.core.masonry.api" 
+ [build-system]
+ requires = ["poetry-core"]
+ build-backend = "poetry.core.masonry.api"
