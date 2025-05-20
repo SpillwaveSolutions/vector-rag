@@ -367,7 +367,13 @@ class DBFileHandler(FileHandler):
             # Copy file metadata to each chunk
             for chunk in chunks:
                 chunk.metadata = file_model.metadata.copy()
-            
+                chunk.metadata["size"] = chunk.size
+                try:
+                    chunk.metadata["chunker"] = self.chunker.__class__.__name__
+                    chunk.metadata["embedder"] = self.embedder.__class__.__name__
+                except:
+                    chunk.metadata["chunker"] = "Unknown"
+
             embeddings = self.embedder.embed_texts(chunks)
 
             for chunk, embedding in zip(chunks, embeddings):

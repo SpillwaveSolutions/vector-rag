@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "vector-rag"
-version = "1.2.11"
+version = "1.2.12"
 description = "RAG (Retrieval-Augmented Generation) System"
 authors = ["Richard Hightower <rick@spillwave.com>", "Chris Mathias <chris@spillwave.com>"]
 readme = "README.md"
