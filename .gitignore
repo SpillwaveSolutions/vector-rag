@@ -56,6 +56,8 @@ out/
 *.code-workspace
 .history/
 
+vector_rag.log
+
 # Docker
 .docker/
 *.log
@@ -122,5 +124,9 @@ celerybeat.pid
 
 .pmarkdownc/
 project_structure.md
+*project_structure*.md
+*project_structure.md
 ./.task
 .aider*
+.yamlproject/
+project.yaml
