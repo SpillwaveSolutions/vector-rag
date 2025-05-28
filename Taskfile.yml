@@ -150,3 +150,11 @@ tasks:
     desc: "Start an interactive psql session"
     cmds:
       - PGPASSWORD=${DB_PASSWORD} psql -h ${DB_HOST} -p ${DB_PORT} -U ${DB_USER} -d ${DB_NAME}
+
+  db:migrate:
+    desc: "Apply database migrations (including FTS support)"
+    deps: [db:up]
+    cmds:
+      - echo "Applying database migrations..."
+      - poetry run python db/scripts/apply_migrations.py
+      - echo "✅ Migrations applied successfully"

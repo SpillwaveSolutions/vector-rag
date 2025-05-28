@@ -1,6 +1,6 @@
-# Vector RAG Complete Query Guide: Text, Semantic Search, and Metadata Filtering
+# Vector RAG Complete Query Guide: Text, Semantic, BM25, and Hybrid Search
 
-The Vector RAG system provides three powerful methods for querying your chunked documents. This guide covers all query methods with practical examples, performance tips, and real-world use cases.
+The Vector RAG system provides five powerful methods for querying your chunked documents. This guide covers all query methods with practical examples, performance tips, and real-world use cases.
 
 ## Table of Contents
 - [Quick Start](#quick-start)
@@ -8,6 +8,8 @@ The Vector RAG system provides three powerful methods for querying your chunked 
 - [Method 1: Direct Text Search](#method-1-direct-text-search-with-query)
 - [Method 2: Semantic Text Search](#method-2-semantic-search-with-search_chunks_by_text)
 - [Method 3: Direct Embedding Search](#method-3-direct-embedding-search-with-search_chunks_by_embedding)
+- [Method 4: BM25 Full-Text Search](#method-4-bm25-full-text-search)
+- [Method 5: Hybrid Search](#method-5-hybrid-search)
 - [Advanced Metadata Filtering](#advanced-metadata-filtering)
 - [Performance Guide](#performance-guide)
 - [Common Patterns & Best Practices](#common-patterns--best-practices)
@@ -16,19 +18,19 @@ The Vector RAG system provides three powerful methods for querying your chunked 
 ## Quick Start
 
 ```python
-from vector_rag.db import DBFileHandler
+from vector_rag.api import VectorRAGAPI
 
-# Initialize handler
-handler = DBFileHandler(config)
+# Initialize API
+api = VectorRAGAPI()
 
 # Method 1: Exact text search (fast, no pagination)
-exact_results = handler.query(
+exact_results = api.query(
     project_id=1,
     query_text="machine learning"
 )
 
 # Method 2: Semantic search (finds related content)
-semantic_results = handler.search_chunks_by_text(
+semantic_results = api.search_text(
     project_id=1,
     query_text="AI algorithms",
     page=1,
@@ -37,10 +39,26 @@ semantic_results = handler.search_chunks_by_text(
 )
 
 # Method 3: Pre-computed embedding search (fastest semantic)
-embedding_results = handler.search_chunks_by_embedding(
+embedding_results = api.search_embedding(
     project_id=1,
     embedding=my_embedding_vector,
     similarity_threshold=0.8
+)
+
+# Method 4: BM25 search (keyword/lexical matching)
+bm25_results = api.search_bm25(
+    project_id=1,
+    query_text="PostgreSQL tsvector",
+    page=1,
+    page_size=10
+)
+
+# Method 5: Hybrid search (combines vector + BM25)
+hybrid_results = api.search_hybrid(
+    project_id=1,
+    query_text="implement OAuth authentication",
+    vector_weight=0.6,
+    bm25_weight=0.4
 )
 ```
 
@@ -49,16 +67,22 @@ embedding_results = handler.search_chunks_by_embedding(
 | Method | Type | Speed | Use Case | Pagination | Similarity Score |
 |--------|------|-------|----------|------------|------------------|
 | `query()` | SQL ILIKE | ⚡⚡⚡ Fastest | Exact/substring matches | ❌ No | ❌ No |
-| `search_chunks_by_text()` | Vector similarity | ⚡ Slowest | Semantic understanding | ✅ Yes | ✅ Yes |
-| `search_chunks_by_embedding()` | Vector similarity | ⚡⚡ Fast | Cached/batch queries | ✅ Yes | ✅ Yes |
+| `search_text()` | Vector similarity | ⚡ Slowest | Semantic understanding | ✅ Yes | ✅ Yes |
+| `search_embedding()` | Vector similarity | ⚡⚡ Fast | Cached/batch queries | ✅ Yes | ✅ Yes |
+| `search_bm25()` | PostgreSQL FTS | ⚡⚡⚡ Very Fast | Keyword/technical terms | ✅ Yes | ✅ Yes (BM25) |
+| `search_hybrid()` | Vector + BM25 | ⚡⚡ Fast | Best of both worlds | ✅ Yes | ✅ Yes (Combined) |
 
 ### Decision Tree
 ```
 Need exact phrase matching? → Use query()
     ↓ No
-Need semantic understanding? → Use search_chunks_by_text()
+Need exact keyword matching? → Use search_bm25()
     ↓ No
-Have pre-computed embeddings? → Use search_chunks_by_embedding()
+Need semantic understanding? → Use search_text()
+    ↓ No
+Need both keyword + semantic? → Use search_hybrid()
+    ↓ No
+Have pre-computed embeddings? → Use search_embedding()
 ```
 
 ## Method 1: Direct Text Search with `query()`
@@ -384,6 +408,259 @@ def build_similarity_matrix(handler, project_id, document_ids, embedder):
     return similarity_matrix
 ```
 
+## Method 4: BM25 Full-Text Search
+
+### When to Use
+- 🔤 Searching for exact technical terms or keywords
+- 📝 Code search (function names, variables, imports)
+- 🏷️ Finding specific identifiers or acronyms
+- ⚡ Need fast keyword-based retrieval
+- 🎯 When exact terms matter more than semantic similarity
+
+### Syntax
+```python
+def search_bm25(
+    self,
+    project_id: int,
+    query_text: str,
+    page: int = 1,
+    page_size: int = 10,
+    rank_threshold: float = 0.0,
+    file_id: int = None,
+    metadata_filter: Optional[dict] = None
+) -> ChunkResults
+```
+
+### Real-World Examples
+
+#### Example 1: Technical Documentation Search
+```python
+# Find PostgreSQL-specific documentation
+pg_docs = api.search_bm25(
+    project_id=1,
+    query_text="PostgreSQL tsvector GIN index",
+    page=1,
+    page_size=10,
+    metadata_filter={"doc_type": "technical"}
+)
+
+# BM25 excels at finding exact technical terminology
+for result in pg_docs.results:
+    print(f"Rank: {result.score:.3f} - {result.chunk.content[:100]}...")
+```
+
+#### Example 2: Code Search
+```python
+# Search for specific function usage
+function_usage = api.search_bm25(
+    project_id=1,
+    query_text="search_chunks_by_embedding embedding parameter",
+    metadata_filter={"file_type": "python"}
+)
+
+# Find import statements
+imports = api.search_bm25(
+    project_id=1,
+    query_text="from vector_rag import",
+    rank_threshold=0.5  # Only high-confidence matches
+)
+```
+
+#### Example 3: Error and Log Search
+```python
+# Search for specific error patterns
+errors = api.search_bm25(
+    project_id=1,
+    query_text="ConnectionError database timeout",
+    metadata_filter={
+        "log_level": ["error", "critical"],
+        "service": "database"
+    }
+)
+
+# Find configuration references
+configs = api.search_bm25(
+    project_id=1,
+    query_text="EMBEDDING_DIM config environment",
+    metadata_filter={"file_type": ["yaml", "env", "json"]}
+)
+```
+
+### BM25 vs Vector Search Comparison
+
+| Query Type | BM25 Result | Vector Result |
+|------------|-------------|---------------|
+| "ts_rank_cd" | ✅ Finds exact function name | ❌ May miss if not in training data |
+| "implement authentication" | ❌ Only if exact words present | ✅ Finds auth-related content |
+| "ERROR_CODE_404" | ✅ Exact match | ❌ No semantic meaning |
+| "machine learning" | ✅ If exact phrase exists | ✅ Finds ML, AI, neural networks |
+
+## Method 5: Hybrid Search
+
+### When to Use
+- 🎯 Need both exact matches AND semantic understanding
+- 📚 Technical documentation with natural language
+- 🔍 Comprehensive search results
+- ⚖️ Want to balance precision and recall
+- 🏆 Best overall search quality
+
+### Syntax
+```python
+def search_hybrid(
+    self,
+    project_id: int,
+    query_text: str,
+    page: int = 1,
+    page_size: int = 10,
+    vector_weight: float = 0.5,
+    bm25_weight: float = 0.5,
+    similarity_threshold: float = 0.0,
+    rank_threshold: float = 0.0,
+    file_id: int = None,
+    metadata_filter: Optional[dict] = None
+) -> ChunkResults
+```
+
+### Real-World Examples
+
+#### Example 1: Technical Query with Context
+```python
+# Search for implementation details
+results = api.search_hybrid(
+    project_id=1,
+    query_text="implement BM25 ranking algorithm PostgreSQL",
+    vector_weight=0.4,  # 40% semantic
+    bm25_weight=0.6,    # 60% keyword (technical focus)
+    page_size=20
+)
+
+# Results include both exact BM25 references AND 
+# conceptually related ranking implementations
+for result in results.results:
+    scores = result.chunk.metadata.get('_scores', {})
+    print(f"Hybrid: {result.score:.3f} (Vector: {scores.get('vector', 0):.3f}, "
+          f"BM25: {scores.get('bm25', 0):.3f})")
+    print(f"Content: {result.chunk.content[:150]}...\n")
+```
+
+#### Example 2: Dynamic Weight Adjustment
+```python
+def adaptive_hybrid_search(api, project_id, query):
+    """Adjust weights based on query characteristics."""
+    
+    # Analyze query
+    technical_terms = ["API", "SQL", "HTTP", "JSON", "OAuth"]
+    has_technical = any(term in query.upper() for term in technical_terms)
+    
+    # Longer queries often benefit from semantic search
+    query_length = len(query.split())
+    
+    if has_technical and query_length < 5:
+        # Short technical query - favor BM25
+        vector_weight, bm25_weight = 0.3, 0.7
+    elif query_length > 10:
+        # Long natural language query - favor vector
+        vector_weight, bm25_weight = 0.7, 0.3
+    else:
+        # Balanced approach
+        vector_weight, bm25_weight = 0.5, 0.5
+    
+    print(f"Query: '{query}'")
+    print(f"Weights: Vector={vector_weight}, BM25={bm25_weight}")
+    
+    return api.search_hybrid(
+        project_id=project_id,
+        query_text=query,
+        vector_weight=vector_weight,
+        bm25_weight=bm25_weight
+    )
+```
+
+#### Example 3: Hybrid Search Pipeline
+```python
+class HybridSearchPipeline:
+    """Advanced hybrid search with fallback strategies."""
+    
+    def __init__(self, api):
+        self.api = api
+        
+    def search(self, project_id, query, min_results=5):
+        strategies = [
+            # Start with balanced hybrid
+            {"vector": 0.5, "bm25": 0.5, "name": "Balanced"},
+            
+            # Try keyword-heavy if few results
+            {"vector": 0.3, "bm25": 0.7, "name": "Keyword-focused"},
+            
+            # Try semantic-heavy as fallback
+            {"vector": 0.7, "bm25": 0.3, "name": "Semantic-focused"},
+            
+            # Pure strategies as last resort
+            {"vector": 1.0, "bm25": 0.0, "name": "Pure Vector"},
+            {"vector": 0.0, "bm25": 1.0, "name": "Pure BM25"}
+        ]
+        
+        for strategy in strategies:
+            results = self.api.search_hybrid(
+                project_id=project_id,
+                query_text=query,
+                vector_weight=strategy["vector"],
+                bm25_weight=strategy["bm25"],
+                page_size=min_results * 2  # Get extra for filtering
+            )
+            
+            print(f"{strategy['name']}: {results.total_count} results")
+            
+            if results.total_count >= min_results:
+                return results
+                
+        return results  # Return last attempt
+```
+
+### Weight Configuration Guide
+
+| Use Case | Vector Weight | BM25 Weight | Example |
+|----------|---------------|-------------|---------|
+| Technical Docs | 0.3-0.4 | 0.6-0.7 | API references, code docs |
+| Natural Language | 0.6-0.8 | 0.2-0.4 | Tutorials, guides |
+| Balanced | 0.5 | 0.5 | General search |
+| Code Search | 0.2 | 0.8 | Function names, syntax |
+| Conceptual | 0.8 | 0.2 | "How to" queries |
+
+### Performance Considerations
+
+The hybrid search performs both vector and BM25 searches in parallel, then combines scores. Consider:
+
+1. **Pre-filtering**: Use metadata filters to reduce search space
+2. **Weight caching**: Cache optimal weights for common query patterns
+3. **Threshold tuning**: Set appropriate thresholds for each component
+
+```python
+# Efficient hybrid search with pre-filtering
+results = api.search_hybrid(
+    project_id=1,
+    query_text="OAuth implementation",
+    vector_weight=0.6,
+    bm25_weight=0.4,
+    similarity_threshold=0.5,  # Minimum vector similarity
+    rank_threshold=0.1,        # Minimum BM25 rank
+    metadata_filter={
+        "date_created": {"$gte": "2024-01-01"},
+        "status": "published"
+    }
+)
+```
+
+### 📚 Learn More
+
+For detailed information about BM25 and hybrid search implementation, including:
+- PostgreSQL FTS configuration
+- Performance benchmarks
+- Advanced tuning strategies
+- Migration guides
+
+See the comprehensive [BM25 and Hybrid Search Documentation](./bm25_hybrid_search.md).
+
 ## Advanced Metadata Filtering
 
 ### Filter Types and Examples
@@ -512,8 +789,10 @@ metadata_filter = (filter_builder
 | Operation | 1K chunks | 10K chunks | 100K chunks | 1M chunks |
 |-----------|-----------|------------|-------------|-----------|
 | `query()` | <10ms | <50ms | <200ms | <2s |
-| `search_chunks_by_text()` | 50-100ms | 100-200ms | 200-500ms | 0.5-2s |
-| `search_chunks_by_embedding()` | 20-50ms | 50-100ms | 100-300ms | 0.3-1s |
+| `search_text()` | 50-100ms | 100-200ms | 200-500ms | 0.5-2s |
+| `search_embedding()` | 20-50ms | 50-100ms | 100-300ms | 0.3-1s |
+| `search_bm25()` | <20ms | <60ms | <250ms | <2.5s |
+| `search_hybrid()` | 60-120ms | 120-250ms | 300-600ms | 0.6-2.5s |
 
 ### Optimization Strategies
 
@@ -566,41 +845,43 @@ indexed_fields = [
 
 ## Common Patterns & Best Practices
 
-### 1. Hybrid Search Pattern
+### 1. Unified Search Pattern
 ```python
-class HybridSearch:
-    """Combines exact and semantic search for best results."""
+class UnifiedSearch:
+    """Smart search that adapts to query type."""
     
-    def search(self, handler, project_id, query, max_results=20):
-        # Step 1: Try exact match first
-        exact_results = handler.query(
-            project_id=project_id,
-            query_text=query
-        )
+    def search(self, api, project_id, query, max_results=20):
+        # Analyze query characteristics
+        is_technical = any(word in query.lower() for word in 
+                         ['function', 'class', 'error', 'config', 'api'])
+        is_question = query.strip().endswith('?')
+        word_count = len(query.split())
         
-        if exact_results.total_count >= max_results:
-            # Enough exact matches
-            return exact_results.chunks[:max_results]
-        
-        # Step 2: Augment with semantic search
-        semantic_results = handler.search_chunks_by_text(
-            project_id=project_id,
-            query_text=query,
-            page_size=max_results - exact_results.total_count,
-            similarity_threshold=0.7
-        )
-        
-        # Combine and deduplicate
-        all_chunks = exact_results.chunks + semantic_results.chunks
-        seen_ids = set()
-        unique_chunks = []
-        
-        for chunk in all_chunks:
-            if chunk.id not in seen_ids:
-                seen_ids.add(chunk.id)
-                unique_chunks.append(chunk)
-        
-        return unique_chunks[:max_results]
+        # Choose search strategy
+        if is_technical and word_count < 5:
+            # Use BM25 for short technical queries
+            return api.search_bm25(
+                project_id=project_id,
+                query_text=query,
+                page_size=max_results
+            )
+        elif is_question or word_count > 8:
+            # Use vector search for questions/long queries
+            return api.search_text(
+                project_id=project_id,
+                query_text=query,
+                page_size=max_results,
+                similarity_threshold=0.7
+            )
+        else:
+            # Use hybrid for everything else
+            return api.search_hybrid(
+                project_id=project_id,
+                query_text=query,
+                page_size=max_results,
+                vector_weight=0.5,
+                bm25_weight=0.5
+            )
 ```
 
 ### 2. Progressive Search Pattern
@@ -831,11 +1112,14 @@ def safe_search(handler, project_id, query, method="semantic", **kwargs):
 ### Quick Reference Card
 
 ```python
+from vector_rag.api import VectorRAGAPI
+api = VectorRAGAPI()
+
 # Exact substring search (no pagination)
-handler.query(project_id=1, query_text="exact phrase")
+api.query(project_id=1, query_text="exact phrase")
 
 # Semantic search with auto-embedding (with pagination)
-handler.search_chunks_by_text(
+api.search_text(
     project_id=1, 
     query_text="conceptual search",
     page=1, 
@@ -843,8 +1127,27 @@ handler.search_chunks_by_text(
     similarity_threshold=0.7
 )
 
+# BM25 keyword search (with pagination)
+api.search_bm25(
+    project_id=1,
+    query_text="PostgreSQL tsvector",
+    page=1,
+    page_size=10,
+    rank_threshold=0.0
+)
+
+# Hybrid search combining vector + BM25
+api.search_hybrid(
+    project_id=1,
+    query_text="implement authentication",
+    vector_weight=0.6,
+    bm25_weight=0.4,
+    page=1,
+    page_size=10
+)
+
 # Pre-computed embedding search (with pagination)
-handler.search_chunks_by_embedding(
+api.search_embedding(
     project_id=1,
     embedding=my_vector,
     page=1,
@@ -863,10 +1166,12 @@ metadata_filter = {
 
 ### Method Selection Guide
 - **Exact text?** → `query()`
-- **Semantic meaning?** → `search_chunks_by_text()`
-- **Have embeddings?** → `search_chunks_by_embedding()`
-- **Need speed?** → Cache embeddings, use `search_chunks_by_embedding()`
-- **Building search UI?** → Start with `search_chunks_by_text()`, add caching later
+- **Technical terms/keywords?** → `search_bm25()`
+- **Semantic meaning?** → `search_text()`
+- **Best of both worlds?** → `search_hybrid()`
+- **Have embeddings?** → `search_embedding()`
+- **Need speed?** → Cache embeddings or use `search_bm25()`
+- **Building search UI?** → Start with `search_hybrid()` for best results
 
 ### Remember
 1. 🎯 Choose the right method for your use case

@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "vector-rag"
-version = "1.2.12"
+version = "2.1.0"
 description = "RAG (Retrieval-Augmented Generation) System"
 authors = ["Richard Hightower <rick@spillwave.com>", "Chris Mathias <chris@spillwave.com>"]
 readme = "README.md"
@@ -10,7 +10,7 @@ packages = [
 ]
 
 [tool.poetry.dependencies]
-python = ">=3.10,<3.13"
+python = ">=3.10,<3.14"
 openai = ">=1.58.1,<2.0.0"
 sqlalchemy = ">=2.0.36,<3.0.0"
 psycopg2-binary = ">=2.9.10,<3.0.0"

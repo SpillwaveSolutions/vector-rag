@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from typing import List, Optional, Sequence, Union
 
 import numpy as np
-from sqlalchemy import Float, create_engine, func, literal, select, text
+from sqlalchemy import Float, create_engine, func, literal, select, text, or_, and_
 from sqlalchemy.orm import sessionmaker
 
 from vector_rag.model import Chunk, ChunkResult, ChunkResults, File, Project
@@ -610,6 +610,30 @@ class DBFileHandler(FileHandler):
                 page_size=len(chunk_results) or 1,
             )
 
+    def _process_search_query(self, query_text: str) -> str:
+        """Process search query to handle stop words and create OR-based query.
+        
+        This is an alternative approach for cases where websearch_to_tsquery
+        is not available or doesn't give desired results.
+        """
+        # Split into words
+        words = query_text.lower().split()
+        
+        # Common English stop words to filter out
+        stop_words = {'the', 'is', 'at', 'which', 'on', 'a', 'an', 'as', 'are', 
+                      'was', 'were', 'in', 'of', 'to', 'for', 'with', 'what', 
+                      'where', 'when', 'how', 'why', 'this', 'that', 'these', 'those'}
+        
+        # Filter out stop words
+        meaningful_words = [w for w in words if w not in stop_words and len(w) > 2]
+        
+        # Join with OR operator
+        if meaningful_words:
+            return ' | '.join(meaningful_words)
+        else:
+            # Fallback to original if all words were stop words
+            return ' | '.join(words)
+
     def _apply_metadata_filters(self, base_query, metadata_filter):
         """
         Apply metadata filters to a query in a consistent way.
@@ -906,6 +930,262 @@ class DBFileHandler(FileHandler):
                     )
                 )
 
+            return ChunkResults(
+                results=chunk_results,
+                total_count=total_count,
+                page=page,
+                page_size=page_size,
+            )
+
+    def search_chunks_by_bm25(
+        self,
+        project_id: int,
+        query_text: str,
+        page: int = 1,
+        page_size: int = 10,
+        rank_threshold: float = 0.0,
+        file_id: int = None,
+        metadata_filter: Optional[dict] = None,
+    ) -> ChunkResults:
+        """Search for chunks using PostgreSQL full-text search (BM25-style).
+        
+        Args:
+            project_id: ID of the project to search within
+            query_text: Text query for full-text search
+            page: Page number for paginated results
+            page_size: Number of results per page
+            rank_threshold: Minimum rank score (0.0 to 1.0)
+            file_id: Optional file ID to limit search
+            metadata_filter: Optional metadata filters
+            
+        Returns:
+            ChunkResults with BM25-ranked results
+        """
+        if page < 1:
+            raise ValueError("Page number must be greater than 0")
+        if page_size < 1:
+            raise ValueError("Page size must be greater than 1")
+            
+        logger.info(f"BM25 search for query: '{query_text}'")
+        logger.debug(f"Metadata filter: {metadata_filter}")
+        
+        with self.session_scope() as session:
+            # Use websearch_to_tsquery for better handling of natural language queries
+            # This is more forgiving than plainto_tsquery and handles phrases better
+            try:
+                # Try websearch_to_tsquery first (PostgreSQL 11+)
+                query_tsq = func.websearch_to_tsquery('english', query_text)
+            except Exception:
+                # Fallback to plainto_tsquery for older PostgreSQL versions
+                logger.debug("websearch_to_tsquery not available, falling back to plainto_tsquery")
+                query_tsq = func.plainto_tsquery('english', query_text)
+            
+            # Calculate BM25-style rank using ts_rank_cd
+            # ts_rank_cd uses cover density ranking which is closer to BM25
+            # Using normalization option 1 to divide rank by document length
+            rank_expr = func.ts_rank_cd(
+                self.Chunk.content_tsv,
+                query_tsq,
+                1  # normalization option: 1 = rank/log(length)
+            ).label('rank')
+            
+            # Build base query
+            base_query = (
+                select(self.Chunk, rank_expr)
+                .join(self.File)
+                .where(self.File.project_id == project_id)
+                .where(self.Chunk.content_tsv.op('@@')(query_tsq))
+                .where(rank_expr >= rank_threshold)
+            )
+            
+            if file_id:
+                base_query = base_query.where(self.File.id == file_id)
+                
+            # Apply metadata filtering
+            base_query = self._apply_metadata_filters(base_query, metadata_filter)
+            
+            # Count total matches
+            count_query = select(func.count()).select_from(base_query.subquery())
+            total_count = session.execute(count_query).scalar() or 0
+            
+            # Pagination and ordering by rank
+            offset = (page - 1) * page_size
+            results = session.execute(
+                base_query.order_by(rank_expr.desc())
+                .offset(offset)
+                .limit(page_size)
+            ).all()
+            
+            # Convert to ChunkResults
+            chunk_results = []
+            for chunk_row, rank in results:
+                chunk_results.append(
+                    ChunkResult(
+                        score=float(rank),  # BM25 rank score
+                        chunk=Chunk(
+                            target_size=1,
+                            content=chunk_row.content,
+                            index=chunk_row.chunk_index,
+                            metadata=chunk_row.chunk_metadata,
+                        ),
+                    )
+                )
+                
+            return ChunkResults(
+                results=chunk_results,
+                total_count=total_count,
+                page=page,
+                page_size=page_size,
+            )
+
+    def search_chunks_hybrid(
+        self,
+        project_id: int,
+        query_text: str,
+        page: int = 1,
+        page_size: int = 10,
+        vector_weight: float = 0.5,
+        bm25_weight: float = 0.5,
+        similarity_threshold: float = 0.0,
+        rank_threshold: float = 0.0,
+        file_id: int = None,
+        metadata_filter: Optional[dict] = None,
+    ) -> ChunkResults:
+        """Hybrid search combining vector similarity and BM25 scores.
+        
+        Args:
+            project_id: ID of the project
+            query_text: Query text
+            page: Page number
+            page_size: Results per page
+            vector_weight: Weight for vector similarity (0-1)
+            bm25_weight: Weight for BM25 score (0-1)
+            similarity_threshold: Min vector similarity
+            rank_threshold: Min BM25 rank
+            file_id: Optional file ID filter
+            metadata_filter: Optional metadata filters
+            
+        Returns:
+            ChunkResults with hybrid scores
+        """
+        if vector_weight + bm25_weight == 0:
+            raise ValueError("At least one weight must be non-zero")
+            
+        # Normalize weights
+        total_weight = vector_weight + bm25_weight
+        vector_weight = vector_weight / total_weight
+        bm25_weight = bm25_weight / total_weight
+        
+        logger.info(f"Hybrid search for query: '{query_text}'")
+        logger.info(f"Weights - Vector: {vector_weight:.2f}, BM25: {bm25_weight:.2f}")
+        
+        # Get embedding for vector search
+        query_embedding = self.embedder.embed_texts(
+            [Chunk(target_size=1, content=query_text, index=0)]
+        )[0]
+        
+        # Ensure embedding is properly formatted
+        if not isinstance(query_embedding, np.ndarray):
+            query_embedding = np.array(query_embedding, dtype=">f4")
+        elif query_embedding.dtype != ">f4":
+            query_embedding = query_embedding.astype(">f4")
+        query_embedding = query_embedding.ravel()
+        
+        with self.session_scope() as session:
+            # Vector similarity calculation
+            distance_expr = self.Chunk.embedding.op("<=>")(query_embedding)
+            similarity_expr = (literal(1.0, type_=Float) - distance_expr)
+            
+            # BM25 rank calculation - use websearch_to_tsquery
+            try:
+                # Try websearch_to_tsquery first (PostgreSQL 11+)
+                query_tsq = func.websearch_to_tsquery('english', query_text)
+            except Exception:
+                # Fallback to plainto_tsquery for older PostgreSQL versions
+                logger.debug("websearch_to_tsquery not available, falling back to plainto_tsquery")
+                query_tsq = func.plainto_tsquery('english', query_text)
+            
+            rank_expr = func.ts_rank_cd(
+                self.Chunk.content_tsv,
+                query_tsq,
+                1  # Better normalization
+            )
+            
+            # Combined score
+            hybrid_score = (
+                (vector_weight * similarity_expr) + 
+                (bm25_weight * rank_expr)
+            ).label('hybrid_score')
+            
+            # Build query that includes both vector and text search
+            base_query = (
+                select(
+                    self.Chunk,
+                    similarity_expr.label('vector_score'),
+                    rank_expr.label('bm25_score'),
+                    hybrid_score
+                )
+                .join(self.File)
+                .where(self.File.project_id == project_id)
+                .where(
+                    # Must match at least one condition
+                    or_(
+                        and_(
+                            similarity_expr >= literal(similarity_threshold, type_=Float),
+                            vector_weight > 0
+                        ),
+                        and_(
+                            self.Chunk.content_tsv.op('@@')(query_tsq),
+                            rank_expr >= literal(rank_threshold, type_=Float),
+                            bm25_weight > 0
+                        )
+                    )
+                )
+            )
+            
+            if file_id:
+                base_query = base_query.where(self.File.id == file_id)
+                
+            # Apply metadata filtering
+            base_query = self._apply_metadata_filters(base_query, metadata_filter)
+            
+            # Count total
+            count_query = select(func.count()).select_from(base_query.subquery())
+            total_count = session.execute(count_query).scalar() or 0
+            
+            # Get results with pagination
+            offset = (page - 1) * page_size
+            results = session.execute(
+                base_query.order_by(hybrid_score.desc())
+                .offset(offset)
+                .limit(page_size)
+            ).all()
+            
+            # Convert results
+            chunk_results = []
+            for row in results:
+                chunk_db, vector_score, bm25_score, hybrid = row
+                
+                # Add scores to metadata for transparency
+                metadata = chunk_db.chunk_metadata.copy()
+                metadata['_scores'] = {
+                    'vector': float(vector_score) if vector_score else 0.0,
+                    'bm25': float(bm25_score) if bm25_score else 0.0,
+                    'hybrid': float(hybrid)
+                }
+                
+                chunk_results.append(
+                    ChunkResult(
+                        score=float(hybrid),
+                        chunk=Chunk(
+                            target_size=1,
+                            content=chunk_db.content,
+                            index=chunk_db.chunk_index,
+                            metadata=metadata,
+                        ),
+                    )
+                )
+                
             return ChunkResults(
                 results=chunk_results,
                 total_count=total_count,
