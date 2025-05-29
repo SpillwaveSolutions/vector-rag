@@ -8,9 +8,9 @@ from typing import List, Optional
 import os
 from pgvector.sqlalchemy import Vector  # type: ignore
 from sqlalchemy import (BigInteger, Column, DateTime, ForeignKey, Integer,
-                        String, Text, UniqueConstraint)
+                        String, Text, UniqueConstraint, Index, Computed)
 
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -76,7 +76,7 @@ class FileDB(DbBase):
 
 
 class ChunkDB(DbBase):
-    """Chunk model with vector embedding."""
+    """Chunk model with vector embedding and full-text search."""
 
     __tablename__ = "chunks"
 
@@ -86,6 +86,12 @@ class ChunkDB(DbBase):
     )
     content: Mapped[str] = mapped_column(Text, nullable=False)
     embedding: Mapped[List[float]] = mapped_column(Vector(None))  # Dimension will be set during initialization
+    
+    # Add tsvector column for full-text search
+    content_tsv: Mapped[object] = mapped_column(
+        TSVECTOR,
+        Computed("to_tsvector('english', content)", persisted=True)
+    )
 
     @classmethod
     def set_embedding_dimension(cls, dimension: int):
@@ -104,3 +110,7 @@ class ChunkDB(DbBase):
     )
 
     file: Mapped["FileDB"] = relationship("FileDB", back_populates="chunks")
+
+
+# Add GIN index for the tsvector column
+Index('idx_chunks_content_tsv', ChunkDB.content_tsv, postgresql_using='gin')

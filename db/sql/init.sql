@@ -6,3 +6,4 @@ CREATE EXTENSION IF NOT EXISTS vector;
 CREATE TABLE IF NOT EXISTS vector_dimension_template (
     embedding vector(384)
 );
+
