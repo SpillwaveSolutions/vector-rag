@@ -730,8 +730,15 @@ class DBFileHandler(FileHandler):
               project_id: int,
               file_id: int = None,
               query_text: str = None,
-              metadata_filter: Optional[dict] = None
+              metadata_filter: Optional[dict] = None,
+              page: int = 1,
+              page_size: int = 10
               ) -> ChunkResults:
+        if page < 1:
+            raise ValueError("Page number must be greater than 0")
+        if page_size < 1:
+            raise ValueError("Page size must be greater than 1")
+            
         with self.session_scope() as session:
 
             # Build base query
@@ -781,8 +788,13 @@ class DBFileHandler(FileHandler):
             # Direct print for debugging
             print(f"DEBUG: Found {total_count} total matching rows for query")
 
-            # Execute the query
-            results = session.execute(base_query).all()
+            # Pagination
+            offset = (page - 1) * page_size
+            results = session.execute(
+                base_query
+                .offset(offset)
+                .limit(page_size)
+            ).all()
 
             logger.debug(f"Found {len(results)} results")
             # Convert to your Pydantic "ChunkResults"
@@ -805,8 +817,8 @@ class DBFileHandler(FileHandler):
             return ChunkResults(
                 results=chunk_results,
                 total_count=total_count,
-                page=1,
-                page_size=len(chunk_results) or 1,
+                page=page,
+                page_size=page_size,
             )
 
     def search_chunks_by_text(
