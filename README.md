@@ -6,6 +6,7 @@ with pgvector for efficient similarity search.
 For detailed information, see:
 - [Design Document](DESIGN.md) - System architecture and requirements
 - [Developer Guide](developer_guide.md) - Detailed setup and development instructions
+- [Metadata Query Guide](docs/metadata_query_guide.md) - Using JSONB metadata queries without search
 
 ## Features
 
